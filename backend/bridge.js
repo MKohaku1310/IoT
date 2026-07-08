@@ -281,14 +281,38 @@ function startBridge() {
 // Chạy ứng dụng
 startBridge();
 
-// Tạo HTTP Server ảo để chạy trên Render (Tránh lỗi Health Check)
+// ==========================================
+// HTTP Health-Check Server (Dùng để Render luôn tồn tại)
+// UptimeRobot hoặc cron-job.org có thể ping endpoint này mỗi 10 phút
+// để ngăn Render Free Tier tự tắt (spin-down sau 15 phút không có traffic)
+// ==========================================
 const http = require('http');
 const PORT = process.env.PORT || 10000;
+
+let serverStartTime = Date.now();
+
 http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Smart Home IoT Bridge is running!\n');
+  const url = req.url || '/';
+
+  // Endpoint /health trả về JSON chi tiết cho uptime monitor
+  if (url === '/health' || url === '/') {
+    const uptimeSeconds = Math.floor((Date.now() - serverStartTime) / 1000);
+    const status = {
+      status: 'ok',
+      service: 'Smart Home IoT Bridge',
+      uptime_seconds: uptimeSeconds,
+      mqtt_connected: mqttService.isConnected ? mqttService.isConnected() : 'unknown',
+      timestamp: new Date().toISOString(),
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(status));
+  } else {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not found\n');
+  }
 }).listen(PORT, () => {
-  logger.info(`Virtual HTTP Server listening on port ${PORT}`);
+  logger.info(`Health-Check HTTP Server đang lắng nghe tại cổng ${PORT}`);
+  logger.info(`Để ngăn Render spin-down, hãy cấu hình UptimeRobot ping: https://<render-url>/health mỗi 10 phút.`);
 });
 
 // Dọn dẹp tài nguyên khi tắt chương trình
@@ -297,3 +321,4 @@ process.on('SIGINT', () => {
   mqttService.close();
   process.exit();
 });
+

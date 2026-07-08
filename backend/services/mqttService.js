@@ -83,6 +83,13 @@ const mqttService = {
       logger.info('Đang ngắt kết nối MQTT Client...');
       client.end();
     }
+  },
+
+  /**
+   * Kiểm tra trạng thái kết nối MQTT
+   */
+  isConnected() {
+    return client ? client.connected : false;
   }
 };
 
