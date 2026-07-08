@@ -13,6 +13,7 @@ import {
   Camera,
   CheckCircle2,
   FileText,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,13 +28,13 @@ import { supabase } from "@/lib/supabase";
 export const Route = createFileRoute("/profile")({
   head: () => ({
     meta: [
-      { title: "Hồ sơ Admin | Smart Home IoT" },
+      { title: "Hồ sơ người dùng | Smart Home IoT" },
       {
         name: "description",
-        content: "Thông tin cá nhân, thiết bị đang quản lý và cấu hình thông báo của quản trị viên.",
+        content: "Thông tin cá nhân, thiết bị đang quản lý và cấu hình thông báo.",
       },
-      { property: "og:title", content: "Hồ sơ Admin | Smart Home IoT" },
-      { property: "og:description", content: "Trang hồ sơ quản trị viên hệ thống Smart Home." },
+      { property: "og:title", content: "Hồ sơ người dùng | Smart Home IoT" },
+      { property: "og:description", content: "Trang hồ sơ người dùng hệ thống Smart Home." },
     ],
   }),
   component: ProfilePage,
@@ -151,7 +152,9 @@ function ProfilePage() {
           .order("idnguoidung", { ascending: false })
           .limit(1);
         
-        if (maxError) throw maxError;
+        if (maxError) {
+          console.warn("Không thể lấy max ID:", maxError);
+        }
         
         const newId = maxData && maxData.length > 0 ? maxData[0].idnguoidung + 1 : 2;
         const displayName = authUser.user_metadata?.full_name ||
@@ -175,15 +178,25 @@ function ProfilePage() {
           .from("nguoidung")
           .insert([newProfile]);
 
-        if (insertError) throw insertError;
-
-        setProfile({
-          ...newProfile,
-          ngaysinh: "",
-          thoigian: new Date().toISOString()
-        });
-        
-        toast.info("Đã tự động khởi tạo hồ sơ cá nhân mới!");
+        if (insertError) {
+          console.warn("Không thể tạo hồ sơ trong database (có thể do RLS):", insertError);
+          // Vẫn set profile local để user có thể sử dụng app
+          setProfile({
+            ...newProfile,
+            ngaysinh: "",
+            thoigian: new Date().toISOString()
+          });
+          toast.warning("Chế độ xem: Không thể lưu hồ sơ vào database do chính sách RLS. Vui lòng tắt RLS cho bảng 'nguoidung' trên Supabase Dashboard.", {
+            duration: 8000
+          });
+        } else {
+          setProfile({
+            ...newProfile,
+            ngaysinh: "",
+            thoigian: new Date().toISOString()
+          });
+          toast.info("Đã tự động khởi tạo hồ sơ cá nhân mới!");
+        }
       }
     } catch (err: any) {
       console.error("Lỗi khi tải/tạo hồ sơ:", err);
@@ -255,6 +268,16 @@ function ProfilePage() {
     setSaving(false);
   };
 
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      toast.success("Đã đăng xuất thành công!");
+      window.location.href = "/";
+    } catch (err: any) {
+      toast.error("Lỗi khi đăng xuất: " + err.message);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_-10%_-10%,#dbe7ff_0%,transparent_60%),radial-gradient(900px_500px_at_110%_10%,#ffe4f0_0%,transparent_55%),linear-gradient(180deg,#f6f7fb_0%,#eef1f8_100%)] p-6 lg:p-10 text-slate-800">
       <div className="mx-auto max-w-6xl space-y-6">
@@ -273,6 +296,15 @@ function ProfilePage() {
               </span>
               <Link to="/" className="font-bold text-indigo-600 hover:underline">Đăng nhập</Link>
             </div>
+          )}
+          {user && (
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+            >
+              <LogOut className="h-4 w-4 mr-2" /> Đăng xuất
+            </Button>
           )}
         </div>
 

@@ -273,28 +273,27 @@ function Dashboard() {
           setAlerts(mappedAlerts as Alert[]);
         }
 
-        // Lấy thông tin user hiện tại từ Supabase Auth
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const authUser = session.user;
-          const { data: profileData } = await supabase
-            .from("nguoidung")
-            .select("*")
-            .eq("email", authUser.email)
-            .maybeSingle();
-          if (profileData) {
-            setCurrentUser(profileData);
-          } else {
-            // Không tìm thấy trong DB - dùng thông tin từ Supabase Auth
-            setCurrentUser({
-              hoten: authUser.user_metadata?.full_name ||
-                authUser.user_metadata?.name ||
-                authUser.email?.split('@')[0] ||
-                "Người dùng",
-              email: authUser.email ?? ""
-            });
-          }
-        }
+        // Không tự động load session cũ - yêu cầu đăng nhập lại
+        // const { data: { session } } = await supabase.auth.getSession();
+        // if (session?.user) {
+        //   const authUser = session.user;
+        //   const { data: profileData } = await supabase
+        //     .from("nguoidung")
+        //     .select("*")
+        //     .eq("email", authUser.email)
+        //     .maybeSingle();
+        //   if (profileData) {
+        //     setCurrentUser(profileData);
+        //   } else {
+        //     setCurrentUser({
+        //       hoten: authUser.user_metadata?.full_name ||
+        //         authUser.user_metadata?.name ||
+        //         authUser.email?.split('@')[0] ||
+        //         "Người dùng",
+        //       email: authUser.email ?? ""
+        //     });
+        //   }
+        // }
       } catch (err) {
         console.error("Lỗi khi tải trạng thái ban đầu:", err);
       } finally {
@@ -397,32 +396,32 @@ function Dashboard() {
       )
       .subscribe();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSessionLoading(true);
-      if (session?.user) {
-        const authUser = session.user;
-        const { data: profileData } = await supabase
-          .from("nguoidung")
-          .select("*")
-          .eq("email", authUser.email)
-          .maybeSingle();
-        if (profileData) {
-          setCurrentUser(profileData);
-        } else {
-          // Không tìm thấy trong DB - dùng thông tin từ Supabase Auth trực tiếp
-          setCurrentUser({
-            hoten: authUser.user_metadata?.full_name ||
-              authUser.user_metadata?.name ||
-              authUser.email?.split('@')[0] ||
-              "Người dùng",
-            email: authUser.email ?? ""
-          });
-        }
-      } else {
-        setCurrentUser(null);
-      }
-      setSessionLoading(false);
-    });
+    // Không tự động load session cũ - yêu cầu đăng nhập lại
+    // const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    //   setSessionLoading(true);
+    //   if (session?.user) {
+    //     const authUser = session.user;
+    //     const { data: profileData } = await supabase
+    //       .from("nguoidung")
+    //       .select("*")
+    //       .eq("email", authUser.email)
+    //       .maybeSingle();
+    //     if (profileData) {
+    //       setCurrentUser(profileData);
+    //     } else {
+    //       setCurrentUser({
+    //         hoten: authUser.user_metadata?.full_name ||
+    //           authUser.user_metadata?.name ||
+    //           authUser.email?.split('@')[0] ||
+    //           "Người dùng",
+    //         email: authUser.email ?? ""
+    //       });
+    //     }
+    //   } else {
+    //     setCurrentUser(null);
+    //   }
+    //   setSessionLoading(false);
+    // });
 
     return () => {
       active = false;
@@ -430,7 +429,6 @@ function Dashboard() {
       supabase.removeChannel(ruleChan);
       supabase.removeChannel(sensorChan);
       supabase.removeChannel(logChan);
-      subscription.unsubscribe();
     };
   }, []);
 
