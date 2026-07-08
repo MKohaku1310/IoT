@@ -5,6 +5,14 @@ const logger = require('../utils/logger');
 // Lưu trữ thời điểm thay đổi trạng thái tự động gần nhất của từng thiết bị để chống bật/tắt liên tục
 const lastStateChangeTime = {};
 
+// Cooldown riêng cho việc ghi log cảnh báo (tránh spam nhật ký)
+// Mặc định: 10 phút giữa mỗi lần ghi log cho cùng một luật khi vẫn đang vi phạm ngưỡng
+const ALERT_LOG_COOLDOWN_MS = 10 * 60 * 1000;
+const lastAlertLogTime = {};
+
+// Trạng thái kích hoạt của lần đánh giá trước: phát hiện edge OFF→ON và ON→OFF
+const prevTriggerState = {};
+
 const automationService = {
   /**
    * Đánh giá và chạy các luật tự động hóa dựa trên dữ liệu cảm biến mới nhận được
@@ -49,12 +57,18 @@ const automationService = {
         }
         
         const targetState = isTriggered ? 1 : 0;
+
+        // Phát hiện edge transition
+        const prevTriggered = prevTriggerState[rule.idluat]; // undefined lần đầu
+        const isEdgeOn  = isTriggered && !prevTriggered;    // Vừa vượt ngưỡng (OFF→ON)
+        const isEdgeOff = !isTriggered && (prevTriggered === true); // Vừa về bình thường (ON→OFF)
+        prevTriggerState[rule.idluat] = isTriggered;
         
         // Đọc trạng thái hiện tại của thiết bị trong database
         const device = await supabaseService.getDeviceStatus(rule.idden);
         if (!device) continue;
         
-        // Nếu trạng thái tính toán khác với trạng thái hiện tại của thiết bị -> Tiến hành thay đổi
+        // Nếu trạng thái tính toán khác với trạng thái hiện tại của thiết bị → Tiến hành thay đổi
         if (device.trangthai !== targetState) {
           const now = Date.now();
           const lastChange = lastStateChangeTime[rule.idden] || 0;
@@ -75,13 +89,21 @@ const automationService = {
           // 2. Cập nhật trạng thái thiết bị trong DB (Supabase Realtime sẽ tự đồng bộ về ESP32)
           await supabaseService.updateDeviceStatus(rule.idden, targetState);
           
-          // 3. Ghi lịch sử hoạt động tự động
-          const actionText = targetState === 1 ? 'Tự động Bật' : 'Tự động Tắt';
-          await supabaseService.writeActionLog(
-            rule.idden, 
-            `${actionText} ${device.tenden} (Do ${sensorName} ${currentValue}${unit} ${rule.toantu} ngưỡng ${rule.nguong}${unit})`,
-            sensorData.iddl
-          );
+          // 3. Ghi nhật ký với logic cooldown + edge:
+          //    - Luôn ghi khi vừa mới vượt ngưỡng (edge ON) hoặc vừa trở về bình thường (edge OFF)
+          //    - Hoặc ghi nhắc lại sau mỗi ALERT_LOG_COOLDOWN_MS nếu vẫn đang vi phạm
+          const lastLog = lastAlertLogTime[rule.idluat] || 0;
+          const shouldLog = isEdgeOn || isEdgeOff || (now - lastLog) >= ALERT_LOG_COOLDOWN_MS;
+
+          if (shouldLog) {
+            const actionText = targetState === 1 ? 'Tự động Bật' : 'Tự động Tắt';
+            await supabaseService.writeActionLog(
+              rule.idden, 
+              `${actionText} ${device.tenden} (Do ${sensorName} ${currentValue}${unit} ${rule.toantu} ngưỡng ${rule.nguong}${unit})`,
+              sensorData.iddl
+            );
+            lastAlertLogTime[rule.idluat] = now;
+          }
         }
       }
     } catch (err) {

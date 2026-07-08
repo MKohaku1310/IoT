@@ -199,6 +199,12 @@ function Dashboard() {
   const [lastSensorTime, setLastSensorTime] = useState<Date | null>(null);
   // Trạng thái online/offline của thiết bị
   const [sensorOnline, setSensorOnline] = useState(false);
+  // Cooldown cảnh báo: lưu timestamp lần cuối gửi cảnh báo cho từng loại sensor
+  // Chỉ tạo cảnh báo mới sau ALERT_COOLDOWN_MS kể từ cảnh báo trước (mặc định 5 phút)
+  const ALERT_COOLDOWN_MS = 5 * 60 * 1000;
+  const alertCooldownRef = useRef<Record<string, number>>({ temp: 0, humid: 0, light: 0 });
+  // Trạng thái cảnh báo của lần đọc trước: phát hiện sự kiện "vừa vượt ngưỡng"
+  const prevAlertStateRef = useRef<Record<string, boolean>>({ temp: false, humid: false, light: false });
 
   // Live sensor / db realtime sync
   useEffect(() => {
@@ -373,31 +379,63 @@ function Dashboard() {
             setLastSensorTime(new Date());
             setSensorOnline(true);
 
+            // ==========================================
             // Kiểm tra và tạo cảnh báo khi vượt ngưỡng
-            const alertsToCreate = [];
-            
-            if (temp >= (thresholds.temp || 30)) {
-              alertsToCreate.push({
-                ...(currentUserId ? { idnguoidung: currentUserId } : {}),
-                hanhdong: `Cảnh báo vượt ngưỡng: Nhiệt độ ${temp}°C vượt ngưỡng ${thresholds.temp}°C`
-              });
-            }
-            
-            if (humid >= (thresholds.humid || 75)) {
-              alertsToCreate.push({
-                ...(currentUserId ? { idnguoidung: currentUserId } : {}),
-                hanhdong: `Cảnh báo vượt ngưỡng: Độ ẩm ${humid}% vượt ngưỡng ${thresholds.humid}%`
-              });
-            }
-            
-            if (light < (thresholds.light || 200)) {
-              alertsToCreate.push({
-                ...(currentUserId ? { idnguoidung: currentUserId } : {}),
-                hanhdong: `Cảnh báo vượt ngưỡng: Ánh sáng ${light} lx dưới ngưỡng ${thresholds.light} lx`
-              });
+            // Điều kiện kép: chỉ tạo cảnh báo khi
+            //   (A) Vừa mới vượt ngưỡng (edge: OFF→ON), HOẶC
+            //   (B) Đã vượt ngưỡng liên tục nhưng đã qua ALERT_COOLDOWN_MS kể từ lần báo cuối
+            // ==========================================
+            const now = Date.now();
+            const curState = {
+              temp: temp >= (thresholds.temp || 30),
+              humid: humid >= (thresholds.humid || 75),
+              light: light < (thresholds.light || 200),
+            };
+            const prev = prevAlertStateRef.current;
+            const cooldown = alertCooldownRef.current;
+
+            const checks: Array<{ key: string; triggered: boolean; msg: string }> = [
+              {
+                key: "temp",
+                triggered: curState.temp,
+                msg: `Cảnh báo vượt ngưỡng: Nhiệt độ ${temp}°C vượt ngưỡng ${thresholds.temp}°C`,
+              },
+              {
+                key: "humid",
+                triggered: curState.humid,
+                msg: `Cảnh báo vượt ngưỡng: Độ ẩm ${humid}% vượt ngưỡng ${thresholds.humid}%`,
+              },
+              {
+                key: "light",
+                triggered: curState.light,
+                msg: `Cảnh báo vượt ngưỡng: Ánh sáng ${light} lx dưới ngưỡng ${thresholds.light} lx`,
+              },
+            ];
+
+            const alertsToCreate: { idnguoidung?: number; hanhdong: string }[] = [];
+
+            for (const c of checks) {
+              if (!c.triggered) {
+                // Reset trạng thái khi về bình thường
+                prev[c.key] = false;
+                continue;
+              }
+              // Điều kiện A: vừa mới chuyển từ bình thường sang vượt ngưỡng (edge trigger)
+              const isEdge = !prev[c.key];
+              // Điều kiện B: đã qua thời gian cooldown
+              const isCooldownOver = (now - (cooldown[c.key] || 0)) >= ALERT_COOLDOWN_MS;
+
+              if (isEdge || isCooldownOver) {
+                alertsToCreate.push({
+                  ...(currentUserId ? { idnguoidung: currentUserId } : {}),
+                  hanhdong: c.msg,
+                });
+                cooldown[c.key] = now;
+              }
+              prev[c.key] = true;
             }
 
-            // Ghi cảnh báo vào database
+            // Ghi cảnh báo vào database (chỉ khi thực sự cần)
             for (const alert of alertsToCreate) {
               try {
                 await supabase.from("nhatkyhoatdong").insert([alert]);
