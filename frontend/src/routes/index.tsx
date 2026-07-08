@@ -183,7 +183,6 @@ function Dashboard() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [bellPing, setBellPing] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ hoten: string; email: string } | null>(null);
-  const [authOpen, setAuthOpen] = useState(false);
 
   // Live sensor / db realtime sync
   useEffect(() => {
@@ -513,7 +512,6 @@ function Dashboard() {
             toggleDark={toggleDark}
             openPalette={() => setPaletteOpen(true)}
             currentUser={currentUser}
-            onLoginClick={() => setAuthOpen(true)}
           />
           <div className="flex-1 p-6 lg:p-8">
             {tab === "dashboard" && (
@@ -535,7 +533,6 @@ function Dashboard() {
           </div>
         </main>
       </div>
-      <AuthDialog open={authOpen} onOpenChange={setAuthOpen} />
     </div>
   );
 }
@@ -681,7 +678,6 @@ function Header({
   toggleDark,
   openPalette,
   currentUser,
-  onLoginClick,
 }: {
   title: string;
   nodeName: string;
@@ -692,7 +688,6 @@ function Header({
   toggleDark: () => void;
   openPalette: () => void;
   currentUser: { hoten: string; email: string } | null;
-  onLoginClick: () => void;
 }) {
   return (
     <header
@@ -818,10 +813,12 @@ function Header({
         </DropdownMenu>
       ) : (
         <Button
-          onClick={onLoginClick}
+          asChild
           className="bg-gradient-to-r from-indigo-500 to-sky-500 text-white shadow-md shadow-indigo-500/20 hover:opacity-90 cursor-pointer"
         >
-          <User className="mr-2 h-4 w-4" /> Đăng nhập
+          <Link to="/login">
+            <User className="mr-2 h-4 w-4" /> Đăng nhập
+          </Link>
         </Button>
       )}
 
@@ -2832,138 +2829,4 @@ function CommandPalette({
   );
 }
 
-interface AuthDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
 
-function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      if (isSignUp) {
-        // Đăng ký với Supabase
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: fullName,
-            },
-          },
-        });
-        if (error) throw error;
-        toast.success("Đăng ký thành công! Vui lòng kiểm tra email kích hoạt hoặc đăng nhập.");
-        setIsSignUp(false);
-      } else {
-        // Đăng nhập với Supabase
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        toast.success("Đăng nhập thành công!");
-        onOpenChange(false);
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Đã xảy ra lỗi");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-white/90 backdrop-blur-md border-white/40 shadow-xl rounded-3xl p-6">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-center text-slate-800">
-            {isSignUp ? "Tạo tài khoản mới" : "Đăng nhập hệ thống"}
-          </DialogTitle>
-          <DialogDescription className="text-center text-slate-500 text-xs">
-            {isSignUp
-              ? "Đăng ký tài khoản để quản lý các thiết bị Smart Home."
-              : "Nhập email và mật khẩu của bạn để truy cập bảng điều khiển."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          {isSignUp && (
-            <div className="space-y-1">
-              <Label htmlFor="auth-fullname" className="text-xs font-semibold text-slate-500">Họ và tên</Label>
-              <Input
-                id="auth-fullname"
-                required
-                placeholder="Nguyễn Văn A"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="bg-white/80 h-9 text-slate-900"
-              />
-            </div>
-          )}
-          <div className="space-y-1">
-            <Label htmlFor="auth-email" className="text-xs font-semibold text-slate-500">Email</Label>
-            <Input
-              id="auth-email"
-              type="email"
-              required
-              placeholder="admin@smarthome.io"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="bg-white/80 h-9 text-slate-900"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="auth-password" className="text-xs font-semibold text-slate-500">Mật khẩu</Label>
-            <Input
-              id="auth-password"
-              type="password"
-              required
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="bg-white/80 h-9 text-slate-900"
-            />
-          </div>
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-indigo-500 to-sky-500 text-white shadow-md shadow-indigo-500/30 hover:opacity-90 cursor-pointer mt-2"
-          >
-            {loading ? "Đang xử lý..." : isSignUp ? "Đăng ký" : "Đăng nhập"}
-          </Button>
-          <div className="text-center text-xs text-slate-500 mt-2">
-            {isSignUp ? (
-              <span>
-                Đã có tài khoản?{" "}
-                <button
-                  type="button"
-                  onClick={() => setIsSignUp(false)}
-                  className="text-indigo-600 font-semibold hover:underline cursor-pointer bg-transparent border-none p-0"
-                >
-                  Đăng nhập ngay
-                </button>
-              </span>
-            ) : (
-              <span>
-                Chưa có tài khoản?{" "}
-                <button
-                  type="button"
-                  onClick={() => setIsSignUp(true)}
-                  className="text-indigo-600 font-semibold hover:underline cursor-pointer bg-transparent border-none p-0"
-                >
-                  Đăng ký ngay
-                </button>
-              </span>
-            )}
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
