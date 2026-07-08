@@ -183,6 +183,7 @@ function Dashboard() {
   });
 
   const [sensors, setSensors] = useState<Sensors>({ temp: 0, humid: 0, light: 0 });
+  const [sensorHistory, setSensorHistory] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [bellPing, setBellPing] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ hoten: string; email: string } | null>(null);
@@ -242,8 +243,9 @@ function Dashboard() {
           .from("dulieucambien")
           .select("*")
           .order("thoigian", { ascending: false })
-          .limit(1);
+          .limit(24);
         if (sensorData && sensorData.length > 0) {
+          setSensorHistory(sensorData);
           setSensors({
             temp: Number(sensorData[0].nhietdo),
             humid: Number(sensorData[0].doam),
@@ -365,6 +367,7 @@ function Dashboard() {
               humid,
               light,
             });
+            setSensorHistory((prev) => [record, ...prev].slice(0, 24));
             setLastSensorTime(new Date());
             setSensorOnline(true);
 
@@ -655,6 +658,7 @@ function Dashboard() {
                 onToggle={handleDeviceToggle}
                 onMode={handleDeviceModeChange}
                 sensors={sensors}
+                sensorHistory={sensorHistory}
                 alerts={alerts}
                 nodeName={node.name}
                 thresholds={thresholds}
@@ -1060,6 +1064,7 @@ function DashboardTab({
   onToggle,
   onMode,
   sensors,
+  sensorHistory,
   alerts,
   nodeName,
   thresholds,
@@ -1068,6 +1073,7 @@ function DashboardTab({
   onToggle: (key: "ac" | "fan" | "light", idden: number, on: boolean) => void;
   onMode: (key: "ac" | "fan" | "light", idden: number, mode: "auto" | "manual") => void;
   sensors: Sensors;
+  sensorHistory: any[];
   alerts: Alert[];
   nodeName: string;
   thresholds?: Record<string, number>;
@@ -1084,16 +1090,29 @@ function DashboardTab({
 
   const latestAlert = alerts.find((a) => a.level === "error");
 
-  const chartData = useMemo(
-    () =>
-      HOURS_24.map((time, i) => ({
+  const chartData = useMemo(() => {
+    if (sensorHistory.length === 0) {
+      return HOURS_24.map((time, i) => ({
         time,
         temp: TEMP_24[i],
         humid: HUMID_24[i],
         light: LIGHT_24[i],
-      })),
-    [],
-  );
+      }));
+    }
+    return [...sensorHistory].reverse().map((h) => {
+      const t = new Date(h.thoigian);
+      const timeLabel = t.toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      return {
+        time: timeLabel,
+        temp: Number(h.nhietdo),
+        humid: Number(h.doam),
+        light: Number(h.anhsang),
+      };
+    });
+  }, [sensorHistory]);
 
   return (
     <div className="space-y-6">
