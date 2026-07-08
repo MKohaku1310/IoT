@@ -175,9 +175,9 @@ function startBridge() {
       rules.forEach(rule => {
         // 1. Đồng bộ ngưỡng cảm biến
         let thresholdTopic = '';
-        if (rule.loaicambien === 'NhietDo') thresholdTopic = 'shinya/threshold/temp';
-        else if (rule.loaicambien === 'DoAm') thresholdTopic = 'shinya/threshold/hum';
-        else if (rule.loaicambien === 'AnhSang') thresholdTopic = 'shinya/threshold/lux';
+        if (rule.loaicambien === 'NhietDo') thresholdTopic = TOPICS.THRESHOLD_TEMP;
+        else if (rule.loaicambien === 'DoAm') thresholdTopic = TOPICS.THRESHOLD_HUM;
+        else if (rule.loaicambien === 'AnhSang') thresholdTopic = TOPICS.THRESHOLD_LUX;
         
         if (thresholdTopic) {
           logger.info(`[Đồng bộ Khởi chạy] Gửi ngưỡng cảm biến -> ${thresholdTopic}: ${rule.nguong}`);
@@ -223,9 +223,9 @@ function startBridge() {
     // Gửi ngưỡng mới xuống ESP32 qua MQTT nếu người dùng đổi trên Web
     if (updatedRule.nguong !== oldRule.nguong) {
       let topic = '';
-      if (updatedRule.loaicambien === 'NhietDo') topic = 'shinya/threshold/temp';
-      else if (updatedRule.loaicambien === 'DoAm') topic = 'shinya/threshold/hum';
-      else if (updatedRule.loaicambien === 'AnhSang') topic = 'shinya/threshold/lux';
+      if (updatedRule.loaicambien === 'NhietDo') topic = TOPICS.THRESHOLD_TEMP;
+      else if (updatedRule.loaicambien === 'DoAm') topic = TOPICS.THRESHOLD_HUM;
+      else if (updatedRule.loaicambien === 'AnhSang') topic = TOPICS.THRESHOLD_LUX;
       
       if (topic) {
         logger.info(`[Realtime DB] Luật ID=${updatedRule.idluat} thay đổi ngưỡng -> ${updatedRule.nguong}. Đang gửi lệnh MQTT...`);

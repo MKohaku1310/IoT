@@ -15,7 +15,7 @@ const mqttBrokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://broker.hivemq.com';
 const mqttPort = parseInt(process.env.MQTT_PORT || '1883', 10);
 
 // Tiền tố topic riêng tư để tránh trùng lặp kênh truyền
-const TOPIC_PREFIX = 'shinya';
+const TOPIC_PREFIX = 'buivansang_iot_pj';
 
 const TOPICS = {
   // Telemetry (ESP32 -> Broker)
@@ -37,7 +37,12 @@ const TOPICS = {
   LED3_CTRL: `${TOPIC_PREFIX}/led3`,
   AUTO1_CTRL: `${TOPIC_PREFIX}/automode`,
   AUTO2_CTRL: `${TOPIC_PREFIX}/automode2`,
-  AUTO3_CTRL: `${TOPIC_PREFIX}/automode3`
+  AUTO3_CTRL: `${TOPIC_PREFIX}/automode3`,
+
+  // Thresholds (Broker -> ESP32)
+  THRESHOLD_TEMP: `${TOPIC_PREFIX}/threshold/temp`,
+  THRESHOLD_HUM:  `${TOPIC_PREFIX}/threshold/hum`,
+  THRESHOLD_LUX:  `${TOPIC_PREFIX}/threshold/lux`
 };
 
 // Cấu hình các ngưỡng giới hạn kiểm tra dữ liệu và bộ lọc

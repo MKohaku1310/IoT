@@ -96,80 +96,80 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println(message);
 
   // --- Điều khiển LED 1 (Điều hòa) ---
-  if (String(topic) == "shinya/automode") {
+  if (String(topic) == "buivansang_iot_pj/automode") {
     autoMode1 = (message == "ON");
     Serial.print("Che do tu dong LED 1: ");
     Serial.println(autoMode1 ? "BAT" : "TAT");
-    client.publish("shinya/automode/state", message.c_str());
+    client.publish("buivansang_iot_pj/automode/state", message.c_str());
   } 
-  else if (String(topic) == "shinya/led") {
+  else if (String(topic) == "buivansang_iot_pj/led") {
     if (!autoMode1) { // Chỉ cho phép điều khiển tay khi Tự động TẮT
       if (message == "ON") {
         digitalWrite(LED_1, HIGH);
         Serial.println("Dieu khien tay: BAT LED 1");
-        client.publish("shinya/led/state", "ON");
+        client.publish("buivansang_iot_pj/led/state", "ON");
       } else if (message == "OFF") {
         digitalWrite(LED_1, LOW);
         Serial.println("Dieu khien tay: TAT LED 1");
-        client.publish("shinya/led/state", "OFF");
+        client.publish("buivansang_iot_pj/led/state", "OFF");
       }
     }
   }
 
   // --- Điều khiển LED 2 (Quạt) ---
-  else if (String(topic) == "shinya/automode2") {
+  else if (String(topic) == "buivansang_iot_pj/automode2") {
     autoMode2 = (message == "ON");
     Serial.print("Che do tu dong LED 2: ");
     Serial.println(autoMode2 ? "BAT" : "TAT");
-    client.publish("shinya/automode2/state", message.c_str());
+    client.publish("buivansang_iot_pj/automode2/state", message.c_str());
   } 
-  else if (String(topic) == "shinya/led2") {
+  else if (String(topic) == "buivansang_iot_pj/led2") {
     if (!autoMode2) {
       if (message == "ON") {
         digitalWrite(LED_2, HIGH);
         Serial.println("Dieu khien tay: BAT LED 2");
-        client.publish("shinya/led2/state", "ON");
+        client.publish("buivansang_iot_pj/led2/state", "ON");
       } else if (message == "OFF") {
         digitalWrite(LED_2, LOW);
         Serial.println("Dieu khien tay: TAT LED 2");
-        client.publish("shinya/led2/state", "OFF");
+        client.publish("buivansang_iot_pj/led2/state", "OFF");
       }
     }
   }
 
   // --- Điều khiển LED 3 (Đèn) ---
-  else if (String(topic) == "shinya/automode3") {
+  else if (String(topic) == "buivansang_iot_pj/automode3") {
     autoMode3 = (message == "ON");
     Serial.print("Che do tu dong LED 3: ");
     Serial.println(autoMode3 ? "BAT" : "TAT");
-    client.publish("shinya/automode3/state", message.c_str());
+    client.publish("buivansang_iot_pj/automode3/state", message.c_str());
   } 
-  else if (String(topic) == "shinya/led3") {
+  else if (String(topic) == "buivansang_iot_pj/led3") {
     if (!autoMode3) {
       if (message == "ON") {
         digitalWrite(LED_3, HIGH);
         Serial.println("Dieu khien tay: BAT LED 3");
-        client.publish("shinya/led3/state", "ON");
+        client.publish("buivansang_iot_pj/led3/state", "ON");
       } else if (message == "OFF") {
         digitalWrite(LED_3, LOW);
         Serial.println("Dieu khien tay: TAT LED 3");
-        client.publish("shinya/led3/state", "OFF");
+        client.publish("buivansang_iot_pj/led3/state", "OFF");
       }
     }
   }
 
   // --- Đồng bộ các ngưỡng tự động hóa ---
-  else if (String(topic) == "shinya/threshold/temp") {
+  else if (String(topic) == "buivansang_iot_pj/threshold/temp") {
     tempThreshold = message.toFloat();
     Serial.print("Nhan nguong nhiet do moi: ");
     Serial.println(tempThreshold);
   }
-  else if (String(topic) == "shinya/threshold/hum") {
+  else if (String(topic) == "buivansang_iot_pj/threshold/hum") {
     humidThreshold = message.toFloat();
     Serial.print("Nhan nguong do am moi: ");
     Serial.println(humidThreshold);
   }
-  else if (String(topic) == "shinya/threshold/lux") {
+  else if (String(topic) == "buivansang_iot_pj/threshold/lux") {
     luxThreshold = message.toFloat();
     Serial.print("Nhan nguong anh sang moi: ");
     Serial.println(luxThreshold);
@@ -187,17 +187,17 @@ void reconnect() {
       Serial.println("OK!");
 
       // Đăng ký nhận tin nhắn từ các topic điều khiển
-      client.subscribe("shinya/led");
-      client.subscribe("shinya/automode");
-      client.subscribe("shinya/led2");
-      client.subscribe("shinya/automode2");
-      client.subscribe("shinya/led3");
-      client.subscribe("shinya/automode3");
+      client.subscribe("buivansang_iot_pj/led");
+      client.subscribe("buivansang_iot_pj/automode");
+      client.subscribe("buivansang_iot_pj/led2");
+      client.subscribe("buivansang_iot_pj/automode2");
+      client.subscribe("buivansang_iot_pj/led3");
+      client.subscribe("buivansang_iot_pj/automode3");
       
       // Đăng ký nhận ngưỡng tự động hóa từ MQTT
-      client.subscribe("shinya/threshold/temp");
-      client.subscribe("shinya/threshold/hum");
-      client.subscribe("shinya/threshold/lux");
+      client.subscribe("buivansang_iot_pj/threshold/temp");
+      client.subscribe("buivansang_iot_pj/threshold/hum");
+      client.subscribe("buivansang_iot_pj/threshold/lux");
       
       lastLed1State = -1;
       lastLed2State = -1;
@@ -267,8 +267,8 @@ void loop() {
       Serial.print(humid);
       Serial.println(" %");
 
-      client.publish("shinya/temp", String(temp, 1).c_str());
-      client.publish("shinya/hum", String(humid, 1).c_str());
+      client.publish("buivansang_iot_pj/temp", String(temp, 1).c_str());
+      client.publish("buivansang_iot_pj/hum", String(humid, 1).c_str());
     }
 
     // ----- KIỂM TRA & GỬI DỮ LIỆU ÁNH SÁNG -----
@@ -279,7 +279,7 @@ void loop() {
       Serial.print(lux);
       Serial.println(" lx");
 
-      client.publish("shinya/lux", String(lux, 1).c_str());
+      client.publish("buivansang_iot_pj/lux", String(lux, 1).c_str());
     }
 
     // ----- LOGIC ĐIỀU KHIỂN & ĐỒNG BỘ TRẠNG THÁI -----
@@ -295,11 +295,11 @@ void loop() {
     
     int currentLed1State = digitalRead(LED_1);
     if (currentLed1State != lastLed1State) {
-      client.publish("shinya/led/state", currentLed1State == HIGH ? "ON" : "OFF");
+      client.publish("buivansang_iot_pj/led/state", currentLed1State == HIGH ? "ON" : "OFF");
       lastLed1State = currentLed1State;
     }
     if (autoMode1 != lastAutoMode1State) {
-      client.publish("shinya/automode/state", autoMode1 ? "ON" : "OFF");
+      client.publish("buivansang_iot_pj/automode/state", autoMode1 ? "ON" : "OFF");
       lastAutoMode1State = autoMode1;
     }
 
@@ -314,11 +314,11 @@ void loop() {
 
     int currentLed2State = digitalRead(LED_2);
     if (currentLed2State != lastLed2State) {
-      client.publish("shinya/led2/state", currentLed2State == HIGH ? "ON" : "OFF");
+      client.publish("buivansang_iot_pj/led2/state", currentLed2State == HIGH ? "ON" : "OFF");
       lastLed2State = currentLed2State;
     }
     if (autoMode2 != lastAutoMode2State) {
-      client.publish("shinya/automode2/state", autoMode2 ? "ON" : "OFF");
+      client.publish("buivansang_iot_pj/automode2/state", autoMode2 ? "ON" : "OFF");
       lastAutoMode2State = autoMode2;
     }
 
@@ -333,11 +333,11 @@ void loop() {
 
     int currentLed3State = digitalRead(LED_3);
     if (currentLed3State != lastLed3State) {
-      client.publish("shinya/led3/state", currentLed3State == HIGH ? "ON" : "OFF");
+      client.publish("buivansang_iot_pj/led3/state", currentLed3State == HIGH ? "ON" : "OFF");
       lastLed3State = currentLed3State;
     }
     if (autoMode3 != lastAutoMode3State) {
-      client.publish("shinya/automode3/state", autoMode3 ? "ON" : "OFF");
+      client.publish("buivansang_iot_pj/automode3/state", autoMode3 ? "ON" : "OFF");
       lastAutoMode3State = autoMode3;
     }
 
