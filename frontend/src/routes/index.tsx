@@ -188,6 +188,11 @@ function Dashboard() {
   const [currentUser, setCurrentUser] = useState<{ hoten: string; email: string } | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [thresholds, setThresholds] = useState<Record<string, number>>({
+    temp: 30,
+    humid: 75,
+    light: 200,
+  });
 
   // Live sensor / db realtime sync
   useEffect(() => {
@@ -214,6 +219,16 @@ function Dashboard() {
             ruleData.forEach((r) => {
               const key = r.idden === 1 ? "ac" : r.idden === 2 ? "fan" : "light";
               next[key] = { ...next[key], mode: r.automation ? "auto" : "manual" };
+            });
+            return next;
+          });
+
+          // Lưu ngưỡng từ db vào state
+          setThresholds((prev) => {
+            const next = { ...prev };
+            ruleData.forEach((r) => {
+              const key = r.idden === 1 ? "temp" : r.idden === 2 ? "humid" : "light";
+              next[key] = Number(r.nguong);
             });
             return next;
           });
@@ -320,6 +335,13 @@ function Dashboard() {
             if (record.idden === 3) next.light = { ...next.light, mode };
             return next;
           });
+
+          // Đồng bộ ngưỡng thời gian thực
+          const key = record.idden === 1 ? "temp" : record.idden === 2 ? "humid" : "light";
+          setThresholds((prev) => ({
+            ...prev,
+            [key]: Number(record.nguong),
+          }));
         }
       )
       .subscribe();
@@ -582,6 +604,7 @@ function Dashboard() {
                 sensors={sensors}
                 alerts={alerts}
                 nodeName={node.name}
+                thresholds={thresholds}
               />
             )}
             {tab === "sensors" && <SensorsTab />}
@@ -978,6 +1001,7 @@ function DashboardTab({
   sensors,
   alerts,
   nodeName,
+  thresholds,
 }: {
   devices: Devices;
   onToggle: (key: "ac" | "fan" | "light", idden: number, on: boolean) => void;
@@ -985,15 +1009,16 @@ function DashboardTab({
   sensors: Sensors;
   alerts: Alert[];
   nodeName: string;
+  thresholds?: Record<string, number>;
 }) {
   const tempA = useAnimatedNumber(sensors.temp);
   const humidA = useAnimatedNumber(sensors.humid);
   const lightA = useAnimatedNumber(sensors.light);
 
   const sensorCards = [
-    { key: "temp", label: "Nhiệt độ", value: tempA.toFixed(1), unit: "°C", icon: Thermometer, alert: sensors.temp >= 30, color: "from-rose-500 to-orange-400" },
-    { key: "humid", label: "Độ ẩm", value: humidA.toFixed(0), unit: "%", icon: Droplets, alert: sensors.humid >= 75, color: "from-sky-500 to-cyan-400" },
-    { key: "light", label: "Ánh sáng", value: Math.round(lightA).toString(), unit: "lx", icon: Sun, alert: sensors.light < 200, color: "from-amber-400 to-yellow-300" },
+    { key: "temp", label: "Nhiệt độ", value: tempA.toFixed(1), unit: "°C", icon: Thermometer, alert: sensors.temp >= (thresholds?.temp || 30), color: "from-rose-500 to-orange-400" },
+    { key: "humid", label: "Độ ẩm", value: humidA.toFixed(0), unit: "%", icon: Droplets, alert: sensors.humid >= (thresholds?.humid || 75), color: "from-sky-500 to-cyan-400" },
+    { key: "light", label: "Ánh sáng", value: Math.round(lightA).toString(), unit: "lx", icon: Sun, alert: sensors.light < (thresholds?.light || 200), color: "from-amber-400 to-yellow-300" },
   ];
 
   const latestAlert = alerts.find((a) => a.level === "error");
