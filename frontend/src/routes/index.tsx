@@ -26,6 +26,7 @@ import {
   UserCircle,
   ArrowRight,
   ShieldAlert,
+  Menu,
   CalendarClock,
   HeartPulse,
   Search,
@@ -186,6 +187,7 @@ function Dashboard() {
   const [bellPing, setBellPing] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ hoten: string; email: string } | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Live sensor / db realtime sync
   useEffect(() => {
@@ -522,7 +524,42 @@ function Dashboard() {
       <div className="pointer-events-none fixed inset-0 z-0 transition-[background] duration-1000" style={{ background: ambient }} />
 
       <div className="relative z-10 flex min-h-screen">
-        <Sidebar tab={tab} setTab={setTab} todLabel={tod.label} node={node} setNodeId={setNodeId} dark={dark} alertCount={alerts.length} />
+        {/* Mobile Sidebar Overlay */}
+        {mobileSidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm lg:hidden transition-opacity duration-300"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
+        {/* Mobile Sidebar Drawer */}
+        <Sidebar
+          tab={tab}
+          setTab={setTab}
+          todLabel={tod.label}
+          node={node}
+          setNodeId={setNodeId}
+          dark={dark}
+          alertCount={alerts.length}
+          onCloseMobile={() => setMobileSidebarOpen(false)}
+          className={cn(
+            "fixed inset-y-0 left-0 z-50 h-full border-r shadow-2xl transition-transform duration-300 transform lg:hidden",
+            mobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
+            dark ? "bg-slate-950 border-white/10" : "bg-white border-slate-200"
+          )}
+        />
+
+        {/* Desktop Sidebar */}
+        <Sidebar
+          tab={tab}
+          setTab={setTab}
+          todLabel={tod.label}
+          node={node}
+          setNodeId={setNodeId}
+          dark={dark}
+          alertCount={alerts.length}
+          className="hidden lg:flex"
+        />
+
         <main className="flex-1 min-w-0 flex flex-col">
           <Header
             title={title}
@@ -534,6 +571,7 @@ function Dashboard() {
             toggleDark={toggleDark}
             openPalette={() => setPaletteOpen(true)}
             currentUser={currentUser}
+            onMenuClick={() => setMobileSidebarOpen(true)}
           />
           <div className="flex-1 p-6 lg:p-8">
             {tab === "dashboard" && (
@@ -569,6 +607,8 @@ function Sidebar({
   setNodeId,
   dark,
   alertCount,
+  className,
+  onCloseMobile,
 }: {
   tab: TabKey;
   setTab: (t: TabKey) => void;
@@ -577,12 +617,15 @@ function Sidebar({
   setNodeId: (id: string) => void;
   dark: boolean;
   alertCount: number;
+  className?: string;
+  onCloseMobile?: () => void;
 }) {
   return (
     <aside
       className={cn(
-        "hidden md:flex w-72 shrink-0 flex-col gap-6 p-5 border-r backdrop-blur-xl",
+        "flex w-72 shrink-0 flex-col gap-6 p-5 border-r backdrop-blur-xl",
         dark ? "border-white/10 bg-slate-950/40" : "border-white/60 bg-white/60",
+        className
       )}
     >
       <div className="flex items-center gap-3 px-2 pt-2">
@@ -628,7 +671,10 @@ function Sidebar({
           return (
             <button
               key={key}
-              onClick={() => setTab(key)}
+              onClick={() => {
+                setTab(key);
+                onCloseMobile?.();
+              }}
               className={cn(
                 "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
                 active
@@ -700,6 +746,7 @@ function Header({
   toggleDark,
   openPalette,
   currentUser,
+  onMenuClick,
 }: {
   title: string;
   nodeName: string;
@@ -710,6 +757,7 @@ function Header({
   toggleDark: () => void;
   openPalette: () => void;
   currentUser: { hoten: string; email: string } | null;
+  onMenuClick?: () => void;
 }) {
   return (
     <header
@@ -718,6 +766,19 @@ function Header({
         dark ? "border-white/10 bg-slate-950/40" : "border-white/60 bg-white/60",
       )}
     >
+      <button
+        onClick={onMenuClick}
+        aria-label="Mở menu"
+        className={cn(
+          "grid h-10 w-10 shrink-0 place-items-center rounded-xl border shadow-sm transition lg:hidden cursor-pointer",
+          dark
+            ? "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+            : "border-white/70 bg-white/80 text-slate-600 hover:bg-white hover:text-slate-900",
+        )}
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h1 className={cn("truncate text-lg font-semibold sm:text-xl", dark ? "text-white" : "text-slate-900")}>{title}</h1>
