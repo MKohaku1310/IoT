@@ -777,6 +777,8 @@ function Sidebar({
         })}
       </nav>
 
+      <div className="flex-1" />
+
       <div className={cn("rounded-2xl border p-3", dark ? "border-white/10 bg-white/5 text-slate-200" : "border-white/70 bg-gradient-to-br from-indigo-50/70 to-sky-50/70 text-slate-700")}>
         <div className="flex items-center gap-2 font-medium text-xs">
           <Moon className="h-3.5 w-3.5" /> {todLabel}
