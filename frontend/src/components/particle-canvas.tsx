@@ -126,16 +126,54 @@ export function ParticleCanvas({ modes }: { modes: ParticleMode[] }) {
           const r = p.r;
           ctx.save();
           ctx.translate(p.x, p.y);
-          // Soft circular glow gradient
-          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.8);
-          g.addColorStop(0, "rgba(255,255,255,1)");
-          g.addColorStop(0.2, "rgba(240,248,255,0.9)");
-          g.addColorStop(0.5, "rgba(200,230,255,0.4)");
-          g.addColorStop(1, "rgba(200,230,255,0)");
+          
+          if (p.rot !== undefined) {
+            ctx.rotate(p.rot);
+          }
+
+          // 1. Soft radial backing glow
+          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.5);
+          g.addColorStop(0, "rgba(255, 255, 255, 0.35)");
+          g.addColorStop(0.4, "rgba(224, 242, 254, 0.15)");
+          g.addColorStop(1, "rgba(224, 242, 254, 0)");
           ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(0, 0, r * 1.8, 0, Math.PI * 2);
+          ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2);
           ctx.fill();
+
+          // 2. Precise Snowflake structure matching the user's image
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+          ctx.lineWidth = Math.max(1.5, r * 0.2);
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+
+          for (let j = 0; j < 6; j++) {
+            // Draw main stem
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -r);
+            ctx.stroke();
+
+            // Inner chevron branches (meeting adjacent ones close to center)
+            ctx.beginPath();
+            ctx.moveTo(0, -r * 0.45);
+            ctx.lineTo(-r * 0.25, -r * 0.65);
+            ctx.moveTo(0, -r * 0.45);
+            ctx.lineTo(r * 0.25, -r * 0.65);
+            ctx.stroke();
+
+            // Outer chevron branches (smaller near the tip)
+            ctx.beginPath();
+            ctx.moveTo(0, -r * 0.75);
+            ctx.lineTo(-r * 0.15, -r * 0.88);
+            ctx.moveTo(0, -r * 0.75);
+            ctx.lineTo(r * 0.15, -r * 0.88);
+            ctx.stroke();
+
+            // Rotate 60 degrees for the next arm
+            ctx.rotate(Math.PI / 3);
+          }
+
           ctx.restore();
         } else if (p.kind === "wind") {
           const g = ctx.createLinearGradient(p.x - p.r, p.y, p.x + p.r, p.y);
