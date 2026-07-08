@@ -145,25 +145,13 @@ function ProfilePage() {
           thoigian: data.thoigian || new Date().toISOString()
         });
       } else {
-        // Lấy ID lớn nhất hiện tại để cộng thêm 1
-        const { data: maxData, error: maxError } = await supabase
-          .from("nguoidung")
-          .select("idnguoidung")
-          .order("idnguoidung", { ascending: false })
-          .limit(1);
-        
-        if (maxError) {
-          console.warn("Không thể lấy max ID:", maxError);
-        }
-        
-        const newId = maxData && maxData.length > 0 ? maxData[0].idnguoidung + 1 : 2;
+        // Để DB tự generate ID (serial/sequence), không truyền idnguoidung thủ công
         const displayName = authUser.user_metadata?.full_name ||
           authUser.user_metadata?.name ||
           authUser.email?.split('@')[0] ||
           "Người dùng";
         
-        const newProfile = {
-          idnguoidung: newId,
+        const newProfileData = {
           hoten: displayName,
           email: authUser.email,
           sodienthoai: "",
@@ -174,26 +162,37 @@ function ProfilePage() {
           linkpdf: "",
         };
 
-        const { error: insertError } = await supabase
+        const { data: insertedData, error: insertError } = await supabase
           .from("nguoidung")
-          .insert([newProfile]);
+          .insert([newProfileData])
+          .select()
+          .single();
 
         if (insertError) {
-          console.warn("Không thể tạo hồ sơ trong database (có thể do RLS):", insertError);
-          // Vẫn set profile local để user có thể sử dụng app
+          console.warn("Không thể tạo hồ sơ trong database:", insertError);
+          // Vẫn set profile local để user có thể dùng app trong phiên này
           setProfile({
-            ...newProfile,
+            idnguoidung: 0,
+            ...newProfileData,
             ngaysinh: "",
             thoigian: new Date().toISOString()
           });
-          toast.warning("Chế độ xem: Không thể lưu hồ sơ vào database do chính sách RLS. Vui lòng tắt RLS cho bảng 'nguoidung' trên Supabase Dashboard.", {
-            duration: 8000
-          });
-        } else {
+          toast.warning(
+            "Chưa thể lưu hồ sơ vào database. Vui lòng thêm RLS policy cho bảng 'nguoidung' trên Supabase Dashboard.",
+            { duration: 8000 }
+          );
+        } else if (insertedData) {
           setProfile({
-            ...newProfile,
-            ngaysinh: "",
-            thoigian: new Date().toISOString()
+            idnguoidung: insertedData.idnguoidung,
+            hoten: insertedData.hoten || "",
+            email: insertedData.email || "",
+            sodienthoai: insertedData.sodienthoai || "",
+            github: insertedData.github || "",
+            figma: insertedData.figma || "",
+            ngaysinh: insertedData.ngaysinh || "",
+            anhdaidien: insertedData.anhdaidien || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop",
+            linkpdf: insertedData.linkpdf || "",
+            thoigian: insertedData.thoigian || new Date().toISOString()
           });
           toast.info("Đã tự động khởi tạo hồ sơ cá nhân mới!");
         }
@@ -294,7 +293,7 @@ function ProfilePage() {
               <span>
                 <span className="font-bold">Chế độ khách:</span> Bạn đang xem tài khoản mẫu. Đăng nhập để chỉnh sửa thông tin!
               </span>
-              <Link to="/" className="font-bold text-indigo-600 hover:underline">Đăng nhập</Link>
+              <Link to="/login" className="font-bold text-indigo-600 hover:underline">Đăng nhập</Link>
             </div>
           )}
           {user && (

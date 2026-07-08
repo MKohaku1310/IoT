@@ -273,27 +273,26 @@ function Dashboard() {
           setAlerts(mappedAlerts as Alert[]);
         }
 
-        // Không tự động load session cũ - yêu cầu đăng nhập lại
-        // const { data: { session } } = await supabase.auth.getSession();
-        // if (session?.user) {
-        //   const authUser = session.user;
-        //   const { data: profileData } = await supabase
-        //     .from("nguoidung")
-        //     .select("*")
-        //     .eq("email", authUser.email)
-        //     .maybeSingle();
-        //   if (profileData) {
-        //     setCurrentUser(profileData);
-        //   } else {
-        //     setCurrentUser({
-        //       hoten: authUser.user_metadata?.full_name ||
-        //         authUser.user_metadata?.name ||
-        //         authUser.email?.split('@')[0] ||
-        //         "Người dùng",
-        //       email: authUser.email ?? ""
-        //     });
-        //   }
-        // }
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const authUser = session.user;
+          const { data: profileData } = await supabase
+            .from("nguoidung")
+            .select("*")
+            .eq("email", authUser.email)
+            .maybeSingle();
+          if (profileData) {
+            setCurrentUser(profileData);
+          } else {
+            setCurrentUser({
+              hoten: authUser.user_metadata?.full_name ||
+                authUser.user_metadata?.name ||
+                authUser.email?.split('@')[0] ||
+                "Người dùng",
+              email: authUser.email ?? ""
+            });
+          }
+        }
       } catch (err) {
         console.error("Lỗi khi tải trạng thái ban đầu:", err);
       } finally {
@@ -354,16 +353,53 @@ function Dashboard() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "dulieucambien" },
-        (payload) => {
+        async (payload) => {
           const record = payload.new;
           if (record) {
+            const temp = Number(record.nhietdo);
+            const humid = Number(record.doam);
+            const light = Number(record.anhsang);
+            
             setSensors({
-              temp: Number(record.nhietdo),
-              humid: Number(record.doam),
-              light: Number(record.anhsang),
+              temp,
+              humid,
+              light,
             });
             setLastSensorTime(new Date());
             setSensorOnline(true);
+
+            // Kiểm tra và tạo cảnh báo khi vượt ngưỡng
+            const alertsToCreate = [];
+            
+            if (temp >= (thresholds.temp || 30)) {
+              alertsToCreate.push({
+                idnguoidung: 1,
+                hanhdong: `Cảnh báo vượt ngưỡng: Nhiệt độ ${temp}°C vượt ngưỡng ${thresholds.temp}°C`
+              });
+            }
+            
+            if (humid >= (thresholds.humid || 75)) {
+              alertsToCreate.push({
+                idnguoidung: 1,
+                hanhdong: `Cảnh báo vượt ngưỡng: Độ ẩm ${humid}% vượt ngưỡng ${thresholds.humid}%`
+              });
+            }
+            
+            if (light < (thresholds.light || 200)) {
+              alertsToCreate.push({
+                idnguoidung: 1,
+                hanhdong: `Cảnh báo vượt ngưỡng: Ánh sáng ${light} lx dưới ngưỡng ${thresholds.light} lx`
+              });
+            }
+
+            // Ghi cảnh báo vào database
+            for (const alert of alertsToCreate) {
+              try {
+                await supabase.from("nhatkyhoatdong").insert([alert]);
+              } catch (err) {
+                console.error("Lỗi khi tạo cảnh báo:", err);
+              }
+            }
           }
         }
       )
@@ -396,32 +432,31 @@ function Dashboard() {
       )
       .subscribe();
 
-    // Không tự động load session cũ - yêu cầu đăng nhập lại
-    // const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-    //   setSessionLoading(true);
-    //   if (session?.user) {
-    //     const authUser = session.user;
-    //     const { data: profileData } = await supabase
-    //       .from("nguoidung")
-    //       .select("*")
-    //       .eq("email", authUser.email)
-    //       .maybeSingle();
-    //     if (profileData) {
-    //       setCurrentUser(profileData);
-    //     } else {
-    //       setCurrentUser({
-    //         hoten: authUser.user_metadata?.full_name ||
-    //           authUser.user_metadata?.name ||
-    //           authUser.email?.split('@')[0] ||
-    //           "Người dùng",
-    //         email: authUser.email ?? ""
-    //       });
-    //     }
-    //   } else {
-    //     setCurrentUser(null);
-    //   }
-    //   setSessionLoading(false);
-    // });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSessionLoading(true);
+      if (session?.user) {
+        const authUser = session.user;
+        const { data: profileData } = await supabase
+          .from("nguoidung")
+          .select("*")
+          .eq("email", authUser.email)
+          .maybeSingle();
+        if (profileData) {
+          setCurrentUser(profileData);
+        } else {
+          setCurrentUser({
+            hoten: authUser.user_metadata?.full_name ||
+              authUser.user_metadata?.name ||
+              authUser.email?.split('@')[0] ||
+              "Người dùng",
+            email: authUser.email ?? ""
+          });
+        }
+      } else {
+        setCurrentUser(null);
+      }
+      setSessionLoading(false);
+    });
 
     return () => {
       active = false;
@@ -429,6 +464,7 @@ function Dashboard() {
       supabase.removeChannel(ruleChan);
       supabase.removeChannel(sensorChan);
       supabase.removeChannel(logChan);
+      subscription.unsubscribe();
     };
   }, []);
 
