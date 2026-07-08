@@ -186,7 +186,8 @@ function Dashboard() {
   const [sensorHistory, setSensorHistory] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [bellPing, setBellPing] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ hoten: string; email: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ hoten: string; email: string; idnguoidung?: number } | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [thresholds, setThresholds] = useState<Record<string, number>>({
@@ -285,6 +286,7 @@ function Dashboard() {
             .maybeSingle();
           if (profileData) {
             setCurrentUser(profileData);
+            setCurrentUserId(Number(profileData.idnguoidung) || null);
           } else {
             setCurrentUser({
               hoten: authUser.user_metadata?.full_name ||
@@ -376,21 +378,21 @@ function Dashboard() {
             
             if (temp >= (thresholds.temp || 30)) {
               alertsToCreate.push({
-                idnguoidung: 1,
+                ...(currentUserId ? { idnguoidung: currentUserId } : {}),
                 hanhdong: `Cảnh báo vượt ngưỡng: Nhiệt độ ${temp}°C vượt ngưỡng ${thresholds.temp}°C`
               });
             }
             
             if (humid >= (thresholds.humid || 75)) {
               alertsToCreate.push({
-                idnguoidung: 1,
+                ...(currentUserId ? { idnguoidung: currentUserId } : {}),
                 hanhdong: `Cảnh báo vượt ngưỡng: Độ ẩm ${humid}% vượt ngưỡng ${thresholds.humid}%`
               });
             }
             
             if (light < (thresholds.light || 200)) {
               alertsToCreate.push({
-                idnguoidung: 1,
+                ...(currentUserId ? { idnguoidung: currentUserId } : {}),
                 hanhdong: `Cảnh báo vượt ngưỡng: Ánh sáng ${light} lx dưới ngưỡng ${thresholds.light} lx`
               });
             }
@@ -446,6 +448,7 @@ function Dashboard() {
           .maybeSingle();
         if (profileData) {
           setCurrentUser(profileData);
+          setCurrentUserId(Number(profileData.idnguoidung) || null);
         } else {
           setCurrentUser({
             hoten: authUser.user_metadata?.full_name ||
@@ -454,9 +457,11 @@ function Dashboard() {
               "Người dùng",
             email: authUser.email ?? ""
           });
+          setCurrentUserId(null);
         }
       } else {
         setCurrentUser(null);
+        setCurrentUserId(null);
       }
       setSessionLoading(false);
     });
@@ -1005,6 +1010,12 @@ function Header({
           0%,100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.0), 0 10px 40px -20px rgba(30,41,59,0.25); }
           50% { box-shadow: 0 0 22px 4px var(--glow, rgba(99,102,241,0.35)), 0 10px 40px -20px rgba(30,41,59,0.25); }
         }
+        @keyframes wind-sway {
+          0%,100% { transform: translateX(0) rotate(-8deg); }
+          25% { transform: translateX(3px) rotate(0deg); }
+          50% { transform: translateX(0) rotate(8deg); }
+          75% { transform: translateX(-3px) rotate(0deg); }
+        }
       `}</style>
     </header>
   );
@@ -1172,6 +1183,7 @@ function DashboardTab({
           state={devices.ac}
           onToggle={(on) => onToggle("ac", 1, on)}
           onMode={(mode) => onMode("ac", 1, mode)}
+          acBreeze={devices.ac.on}
         />
         <DeviceCard
           name="Quạt"
@@ -1254,6 +1266,7 @@ function DeviceCard({
   onMode,
   spinIcon,
   lightHalo,
+  acBreeze,
 }: {
   name: string;
   icon: typeof Wind;
@@ -1264,6 +1277,7 @@ function DeviceCard({
   onMode: (m: "auto" | "manual") => void;
   spinIcon?: boolean;
   lightHalo?: boolean;
+  acBreeze?: boolean;
 }) {
   return (
     <div
@@ -1294,7 +1308,17 @@ function DeviceCard({
                 !state.on && "opacity-40 grayscale",
               )}
             >
-              <Icon className={cn("h-5 w-5", spinIcon && "animate-spin")} style={spinIcon ? { animationDuration: "1.4s" } : undefined} />
+              <Icon
+                className={cn(
+                  "h-5 w-5",
+                  spinIcon && "animate-spin",
+                  !spinIcon && !acBreeze && state.on && "animate-pulse",
+                )}
+                style={{
+                  ...(spinIcon ? { animationDuration: "1.4s" } : {}),
+                  ...(acBreeze ? { animation: "wind-sway 1.6s ease-in-out infinite" } : {}),
+                }}
+              />
             </div>
             <div>
               <div className="text-sm font-semibold text-slate-900">{name}</div>

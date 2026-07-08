@@ -25,7 +25,7 @@ export function ParticleCanvas({ modes }: { modes: ParticleMode[] }) {
     resize();
     window.addEventListener("resize", resize);
 
-    type P = { x: number; y: number; vx: number; vy: number; r: number; a: number; kind: string; seed?: number };
+    type P = { x: number; y: number; vx: number; vy: number; r: number; a: number; kind: string; seed?: number; rot?: number; rotV?: number };
     const particles: P[] = [];
 
     const spawn = () => {
@@ -39,10 +39,12 @@ export function ParticleCanvas({ modes }: { modes: ParticleMode[] }) {
               y: -20,
               vx: (Math.random() - 0.5) * 1.4 * dpr,
               vy: (0.6 + Math.random() * 1.6) * dpr,
-              r: (1.5 + Math.random() * 3.5) * dpr,
-              a: 0.7 + Math.random() * 0.3,
+              r: (4 + Math.random() * 8) * dpr,
+              a: 0.65 + Math.random() * 0.35,
               kind: "snow",
               seed: Math.random() * 1000,
+              rot: Math.random() * Math.PI * 2,
+              rotV: (Math.random() - 0.5) * 0.015,
             });
         }
       }
@@ -106,8 +108,11 @@ export function ParticleCanvas({ modes }: { modes: ParticleMode[] }) {
       const t = performance.now();
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
-        // snow drift wobble
-        if (p.kind === "snow") p.x += Math.sin(t / 700 + (p.seed ?? 0)) * 0.4 * dpr;
+        // snow drift wobble + rotation
+        if (p.kind === "snow") {
+          p.x += Math.sin(t / 700 + (p.seed ?? 0)) * 0.4 * dpr;
+          if (p.rot !== undefined && p.rotV !== undefined) p.rot += p.rotV;
+        }
         p.x += p.vx;
         p.y += p.vy;
         if (p.kind === "star") p.a = 0.25 + (Math.sin(t / 500 + (p.seed ?? 0)) * 0.5 + 0.5) * 0.6;
@@ -119,19 +124,55 @@ export function ParticleCanvas({ modes }: { modes: ParticleMode[] }) {
         }
         ctx.globalAlpha = Math.min(1, p.a);
         if (p.kind === "snow") {
+          const rot = p.rot ?? 0;
+          const r = p.r;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(rot);
           // glow halo
-          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 2.5);
-          g.addColorStop(0, "rgba(224,242,254,0.95)");
-          g.addColorStop(0.4, "rgba(224,242,254,0.5)");
-          g.addColorStop(1, "rgba(224,242,254,0)");
+          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.8);
+          g.addColorStop(0, "rgba(186,230,255,0.5)");
+          g.addColorStop(1, "rgba(186,230,255,0)");
           ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r * 2.5, 0, Math.PI * 2);
+          ctx.arc(0, 0, r * 2.8, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = "#ffffff";
+          // draw 6-armed snowflake
+          ctx.strokeStyle = "rgba(255,255,255,0.92)";
+          ctx.lineWidth = Math.max(1, r * 0.22);
+          ctx.lineCap = "round";
+          for (let arm = 0; arm < 6; arm++) {
+            ctx.save();
+            ctx.rotate((arm * Math.PI) / 3);
+            // main arm
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -r);
+            ctx.stroke();
+            // two branch pairs at 60% and 85% of arm length
+            const branchAngles = [Math.PI / 5, -Math.PI / 5];
+            const branchStarts = [r * 0.45, r * 0.72];
+            const branchLens = [r * 0.38, r * 0.26];
+            for (let b = 0; b < 2; b++) {
+              for (const ang of branchAngles) {
+                ctx.save();
+                ctx.translate(0, -branchStarts[b]);
+                ctx.rotate(ang);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, -branchLens[b]);
+                ctx.stroke();
+                ctx.restore();
+              }
+            }
+            ctx.restore();
+          }
+          // center dot
+          ctx.fillStyle = "rgba(255,255,255,0.95)";
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
           ctx.fill();
+          ctx.restore();
         } else if (p.kind === "wind") {
           const g = ctx.createLinearGradient(p.x - p.r, p.y, p.x + p.r, p.y);
           g.addColorStop(0, "rgba(200,230,255,0)");
