@@ -231,6 +231,8 @@ function Dashboard() {
   const [lastSensorTime, setLastSensorTime] = useState<Date | null>(null);
   // Trạng thái online/offline của thiết bị
   const [sensorOnline, setSensorOnline] = useState(false);
+  // Trạng thái lỗi kết nối Supabase
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   // Cooldown cảnh báo: lưu timestamp lần cuối gửi cảnh báo cho từng loại sensor
   // Chỉ tạo cảnh báo mới sau ALERT_COOLDOWN_MS kể từ cảnh báo trước (mặc định 5 phút)
   const ALERT_COOLDOWN_MS = 5 * 60 * 1000;
@@ -244,7 +246,12 @@ function Dashboard() {
 
     const loadInitial = async () => {
       try {
-        const { data: devData } = await supabase.from("den").select("*");
+        const { data: devData, error: devError } = await supabase.from("den").select("*");
+        if (devError) {
+          console.error("Lỗi load bảng den:", devError);
+          setConnectionError(`Không thể kết nối Supabase: ${devError.message}`);
+          toast.error("Lỗi kết nối database", { description: devError.message });
+        }
         if (devData) {
           setDevices((prev) => {
             const next = { ...prev };
@@ -256,7 +263,11 @@ function Dashboard() {
           });
         }
 
-        const { data: ruleData } = await supabase.from("luat").select("*");
+        const { data: ruleData, error: ruleError } = await supabase.from("luat").select("*");
+        if (ruleError) {
+          console.error("Lỗi load bảng luat:", ruleError);
+          toast.error("Lỗi đọc cấu hình luật", { description: ruleError.message });
+        }
         if (ruleData) {
           setDevices((prev) => {
             const next = { ...prev };
@@ -278,11 +289,15 @@ function Dashboard() {
           });
         }
 
-        const { data: sensorData } = await supabase
+        const { data: sensorData, error: sensorError } = await supabase
           .from("dulieucambien")
           .select("*")
           .order("thoigian", { ascending: false })
           .limit(24);
+        if (sensorError) {
+          console.error("Lỗi load dữ liệu cảm biến:", sensorError);
+          toast.error("Lỗi đọc dữ liệu cảm biến", { description: sensorError.message });
+        }
         if (sensorData && sensorData.length > 0) {
           setSensorHistory(sensorData);
           setSensors({
@@ -335,8 +350,13 @@ function Dashboard() {
             });
           }
         }
+        // Kết nối thành công → xóa lỗi
+        if (!connectionError) setConnectionError(null);
       } catch (err) {
         console.error("Lỗi khi tải trạng thái ban đầu:", err);
+        const msg = err instanceof Error ? err.message : "Lỗi không xác định";
+        setConnectionError(`Không thể kết nối đến database: ${msg}`);
+        toast.error("Lỗi kết nối", { description: msg });
       } finally {
         setSessionLoading(false);
       }
@@ -361,7 +381,12 @@ function Dashboard() {
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.error("Realtime channel 'den' error");
+          toast.error("Mất kết nối Realtime", { description: "Kênh thiết bị bị ngắt. Đang thử kết nối lại..." });
+        }
+      });
 
     const ruleChan = supabase
       .channel("db-luat-changes")
@@ -388,7 +413,12 @@ function Dashboard() {
           }));
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.error("Realtime channel 'luat' error");
+          toast.error("Lỗi kênh tự động hóa", { description: "Không thể đồng bộ luật. Đang kết nối lại..." });
+        }
+      });
 
     const sensorChan = supabase
       .channel("db-sensor-changes")
@@ -478,7 +508,12 @@ function Dashboard() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.error("Realtime channel 'dulieucambien' error");
+          toast.error("Lỗi kết nối cảm biến", { description: "Mất kết nối nhận dữ liệu trực tiếp từ ESP32!" });
+        }
+      });
 
     const logChan = supabase
       .channel("db-log-changes")
@@ -505,7 +540,11 @@ function Dashboard() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.error("Realtime channel 'nhatkyhoatdong' error");
+        }
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSessionLoading(true);
@@ -673,7 +712,21 @@ function Dashboard() {
       <ParticleCanvas modes={particleModes} />
       <div className="pointer-events-none fixed inset-0 z-0 transition-[background] duration-1000" style={{ background: ambient }} />
 
-      <div className="relative z-10 flex min-h-screen">
+      {/* Connection Error Banner */}
+      {connectionError && (
+        <div className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-3 bg-rose-600 px-4 py-2.5 text-white text-sm font-medium shadow-lg">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span className="truncate">{connectionError}</span>
+          <button
+            onClick={() => { setConnectionError(null); window.location.reload(); }}
+            className="ml-2 shrink-0 rounded bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30 transition-colors"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
+      <div className={cn("relative z-10 flex min-h-screen", connectionError && "pt-10")}>
         {/* Mobile Sidebar Overlay */}
         {mobileSidebarOpen && (
           <div

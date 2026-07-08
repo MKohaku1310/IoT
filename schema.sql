@@ -136,42 +136,41 @@ ALTER TABLE nguoidung      DISABLE ROW LEVEL SECURITY;
 ALTER TABLE lichhengio     DISABLE ROW LEVEL SECURITY;
 
 -- ============================================================
--- 11. [FIX #2] Bật Realtime cho các bảng cần thiết (Bọc trong khối DO để tránh lỗi nếu đã tồn tại)
+-- 11. [FIX #2] Bật Realtime cho các bảng cần thiết
 -- ============================================================
-DO $$
+ALTER PUBLICATION supabase_realtime ADD TABLE den;
+ALTER PUBLICATION supabase_realtime ADD TABLE luat;
+ALTER PUBLICATION supabase_realtime ADD TABLE nhatkyhoatdong;
+ALTER PUBLICATION supabase_realtime ADD TABLE dulieucambien;
+ALTER PUBLICATION supabase_realtime ADD TABLE lichhengio;
+
+-- ============================================================
+-- 12. [FIX #4] Indexes cho các cột query thường xuyên
+-- Giúp tăng tốc ORDER BY thoigian DESC và WHERE filters
+-- ============================================================
+CREATE INDEX IF NOT EXISTS idx_dulieucambien_thoigian ON dulieucambien(thoigian DESC);
+CREATE INDEX IF NOT EXISTS idx_nhatkyhoatdong_thoigian ON nhatkyhoatdong(thoigian DESC);
+CREATE INDEX IF NOT EXISTS idx_nhatkyhoatdong_idden ON nhatkyhoatdong(idden);
+CREATE INDEX IF NOT EXISTS idx_lichhengio_kichhoat ON lichhengio(kichhoat) WHERE kichhoat = true;
+
+-- ============================================================
+-- 13. [FIX #5] Hàm dọn dẹp dữ liệu cũ (Data Retention)
+-- Xóa dữ liệu cảm biến > 30 ngày và nhật ký > 90 ngày
+-- Chạy thủ công: SELECT cleanup_old_data();
+-- Hoặc đặt pg_cron trên Supabase Dashboard (Extensions → pg_cron)
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.cleanup_old_data()
+RETURNS TEXT LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  sensor_count INT;
+  log_count INT;
 BEGIN
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE den;
-  EXCEPTION
-    WHEN duplicate_object THEN
-      RAISE NOTICE 'Table den is already a member of publication';
-  END;
+  DELETE FROM dulieucambien WHERE thoigian < NOW() - INTERVAL '30 days';
+  GET DIAGNOSTICS sensor_count = ROW_COUNT;
 
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE luat;
-  EXCEPTION
-    WHEN duplicate_object THEN
-      RAISE NOTICE 'Table luat is already a member of publication';
-  END;
+  DELETE FROM nhatkyhoatdong WHERE thoigian < NOW() - INTERVAL '90 days';
+  GET DIAGNOSTICS log_count = ROW_COUNT;
 
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE nhatkyhoatdong;
-  EXCEPTION
-    WHEN duplicate_object THEN
-      RAISE NOTICE 'Table nhatkyhoatdong is already a member of publication';
-  END;
-
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE dulieucambien;
-  EXCEPTION
-    WHEN duplicate_object THEN
-      RAISE NOTICE 'Table dulieucambien is already a member of publication';
-  END;
-
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE lichhengio;
-  EXCEPTION
-    WHEN duplicate_object THEN
-      RAISE NOTICE 'Table lichhengio is already a member of publication';
-  END;
-END $$;
+  RETURN format('Đã xóa %s bản ghi cảm biến và %s bản ghi nhật ký', sensor_count, log_count);
+END;
+$$;

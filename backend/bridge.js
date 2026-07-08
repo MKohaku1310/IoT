@@ -18,6 +18,41 @@ let currentTelemetry = {
   luxTime: 0
 };
 
+// Timer fallback: nếu chỉ nhận được 1-2 gói tin mà thiếu gói còn lại,
+// vẫn lưu dữ liệu hiện có sau khi hết thời gian chờ (tránh mất dữ liệu hoàn toàn)
+let bufferFallbackTimer = null;
+
+function startBufferFallbackTimer() {
+  if (bufferFallbackTimer) clearTimeout(bufferFallbackTimer);
+  bufferFallbackTimer = setTimeout(async () => {
+    const { temp, hum, lux } = currentTelemetry;
+    const hasAny = temp !== null || hum !== null || lux !== null;
+    if (!hasAny) return;
+    
+    // Nếu đủ 3 giá trị thì bỏ qua (đã được xử lý bởi logic gom cụm chính)
+    if (temp !== null && hum !== null && lux !== null) return;
+    
+    const missing = [];
+    if (temp === null) missing.push('Nhiệt độ');
+    if (hum === null) missing.push('Độ ẩm');
+    if (lux === null) missing.push('Ánh sáng');
+    logger.warn(`[Cảm biến] Timeout gom cụm! Thiếu: ${missing.join(', ')}. Lưu dữ liệu có sẵn.`);
+    
+    try {
+      const record = await supabaseService.insertSensorData(temp, hum, lux);
+      logger.success(`[Cảm biến] Đã lưu bản ghi không đầy đủ ID=${record.iddl}.`);
+      await automationService.evaluateRules(record);
+    } catch (err) {
+      logger.error('Lỗi khi lưu dữ liệu cảm biến không đầy đủ:', err.message);
+    }
+    
+    // Reset buffer
+    currentTelemetry.temp = null;
+    currentTelemetry.hum = null;
+    currentTelemetry.lux = null;
+  }, SETTINGS.BUFFER_TIMEOUT_MS + 2000);
+}
+
 // Hàm ánh xạ idDen sang topic tương ứng
 function getDeviceTopics(idDen) {
   if (idDen === 1) return { ctrl: TOPICS.LED1_CTRL, autoCtrl: TOPICS.AUTO1_CTRL };
@@ -77,6 +112,9 @@ async function handleTelemetryInput(topic, valueStr) {
     currentTelemetry.luxTime = now;
   }
 
+  // Kích hoạt timer fallback mỗi khi nhận gói tin mới
+  startBufferFallbackTimer();
+
   // B. Gom cụm dữ liệu: Nếu cả 3 chỉ số đều có giá trị
   if (currentTelemetry.temp !== null && currentTelemetry.hum !== null && currentTelemetry.lux !== null) {
     // Đo độ lệch thời gian lớn nhất giữa 3 gói tin
@@ -92,6 +130,8 @@ async function handleTelemetryInput(topic, valueStr) {
       currentTelemetry.temp = null;
       currentTelemetry.hum = null;
       currentTelemetry.lux = null;
+      // Hủy timer fallback vì đã ghi thành công đủ bộ
+      if (bufferFallbackTimer) { clearTimeout(bufferFallbackTimer); bufferFallbackTimer = null; }
 
       logger.info(`[Cảm biến] Nhận đủ bộ: Nhiệt độ=${tempVal}°C, Độ ẩm=${humVal}%, Ánh sáng=${luxVal} lx. Đang ghi vào Supabase...`);
 
