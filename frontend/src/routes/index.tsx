@@ -631,7 +631,7 @@ function Dashboard() {
           dark={dark}
           alertCount={alerts.length}
           sensorOnline={sensorOnline}
-          className="hidden lg:flex"
+          className="hidden lg:flex sticky top-0 h-screen"
         />
 
         <main className="flex-1 min-w-0 flex flex-col">
