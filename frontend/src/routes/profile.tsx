@@ -258,12 +258,23 @@ function ProfilePage() {
   return (
     <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_-10%_-10%,#dbe7ff_0%,transparent_60%),radial-gradient(900px_500px_at_110%_10%,#ffe4f0_0%,transparent_55%),linear-gradient(180deg,#f6f7fb_0%,#eef1f8_100%)] p-6 lg:p-10 text-slate-800">
       <div className="mx-auto max-w-6xl space-y-6">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
-        >
-          <ArrowLeft className="h-4 w-4" /> Về Bảng điều khiển
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
+          >
+            <ArrowLeft className="h-4 w-4" /> Về Bảng điều khiển
+          </Link>
+
+          {!user && (
+            <div className="flex-1 min-w-[280px] flex items-center justify-between gap-4 rounded-full border border-amber-200 bg-amber-50/80 px-4 py-2 text-xs text-amber-800 shadow-sm backdrop-blur-lg">
+              <span>
+                <span className="font-bold">Chế độ khách:</span> Bạn đang xem tài khoản mẫu. Đăng nhập để chỉnh sửa thông tin!
+              </span>
+              <Link to="/" className="font-bold text-indigo-600 hover:underline">Đăng nhập</Link>
+            </div>
+          )}
+        </div>
 
         {/* Header card */}
         <GlassCard>
