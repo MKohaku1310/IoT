@@ -28,11 +28,15 @@ export function ParticleCanvas({ modes }: { modes: ParticleMode[] }) {
     type P = { x: number; y: number; vx: number; vy: number; r: number; a: number; kind: string; seed?: number; rot?: number; rotV?: number };
     const particles: P[] = [];
 
+    const MAX_PARTICLES = 80;
+
     const spawn = () => {
       const active = new Set(modesRef.current);
-      // SNOW — optimized spawn rate and count
+      // Hard cap to prevent performance degradation
+      if (particles.length >= MAX_PARTICLES) return;
+      // SNOW — reduced spawn rate
       if (active.has("snow")) {
-        if (Math.random() < 0.25) {
+        if (Math.random() < 0.08) {
           particles.push({
             x: Math.random() * w,
             y: -20,
@@ -47,22 +51,20 @@ export function ParticleCanvas({ modes }: { modes: ParticleMode[] }) {
           });
         }
       }
-      // WIND — many streaks, faster
+      // WIND — reduced streaks
       if (active.has("wind")) {
-        for (let k = 0; k < 2; k++) {
-          if (Math.random() < 0.75)
-            particles.push({
-              x: -80 * dpr,
-              y: Math.random() * h,
-              vx: (6 + Math.random() * 9) * dpr,
-              vy: (Math.random() - 0.5) * 0.6 * dpr,
-              r: (60 + Math.random() * 140) * dpr,
-              a: 0.22 + Math.random() * 0.25,
-              kind: "wind",
-            });
-        }
+        if (Math.random() < 0.4)
+          particles.push({
+            x: -80 * dpr,
+            y: Math.random() * h,
+            vx: (6 + Math.random() * 9) * dpr,
+            vy: (Math.random() - 0.5) * 0.6 * dpr,
+            r: (60 + Math.random() * 140) * dpr,
+            a: 0.18 + Math.random() * 0.2,
+            kind: "wind",
+          });
         // small leaf-like specks
-        if (Math.random() < 0.5)
+        if (Math.random() < 0.2)
           particles.push({
             x: -20 * dpr,
             y: Math.random() * h,
@@ -76,13 +78,13 @@ export function ParticleCanvas({ modes }: { modes: ParticleMode[] }) {
       }
       if (active.has("stars")) {
         const stars = particles.filter((p) => p.kind === "star").length;
-        if (stars < 120)
+        if (stars < 50)
           particles.push({ x: Math.random() * w, y: Math.random() * h, vx: 0, vy: 0, r: (0.5 + Math.random() * 1.8) * dpr, a: 0.3, kind: "star", seed: Math.random() * 1000 });
       }
-      if (active.has("mist") && Math.random() < 0.35)
-        particles.push({ x: Math.random() * w, y: h + 10, vx: (Math.random() - 0.5) * 0.3 * dpr, vy: -(0.2 + Math.random() * 0.4) * dpr, r: (3 + Math.random() * 6) * dpr, a: 0.3 + Math.random() * 0.25, kind: "mist" });
-      if (active.has("shimmer") && Math.random() < 0.2)
-        particles.push({ x: Math.random() * w, y: h * (0.1 + Math.random() * 0.5), vx: (Math.random() - 0.5) * 0.3 * dpr, vy: -0.6 * dpr, r: (14 + Math.random() * 32) * dpr, a: 0.22, kind: "shimmer" });
+      if (active.has("mist") && Math.random() < 0.15)
+        particles.push({ x: Math.random() * w, y: h + 10, vx: (Math.random() - 0.5) * 0.3 * dpr, vy: -(0.2 + Math.random() * 0.4) * dpr, r: (3 + Math.random() * 6) * dpr, a: 0.25 + Math.random() * 0.2, kind: "mist" });
+      if (active.has("shimmer") && Math.random() < 0.1)
+        particles.push({ x: Math.random() * w, y: h * (0.1 + Math.random() * 0.5), vx: (Math.random() - 0.5) * 0.3 * dpr, vy: -0.6 * dpr, r: (14 + Math.random() * 32) * dpr, a: 0.18, kind: "shimmer" });
     };
 
     // remove leftover particles for deactivated modes
@@ -126,51 +128,23 @@ export function ParticleCanvas({ modes }: { modes: ParticleMode[] }) {
           const r = p.r;
           ctx.save();
           ctx.translate(p.x, p.y);
-          
-          if (p.rot !== undefined) {
-            ctx.rotate(p.rot);
-          }
+          if (p.rot !== undefined) ctx.rotate(p.rot);
 
-          // 1. Soft radial backing glow
-          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.5);
-          g.addColorStop(0, "rgba(255, 255, 255, 0.35)");
-          g.addColorStop(0.4, "rgba(224, 242, 254, 0.15)");
-          g.addColorStop(1, "rgba(224, 242, 254, 0)");
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2);
-          ctx.fill();
-
-          // 2. Precise Snowflake structure matching the user's image
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-          ctx.lineWidth = Math.max(1.5, r * 0.2);
+          // Lightweight snowflake: simple 6-arm cross (no gradient glow)
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+          ctx.lineWidth = Math.max(1, r * 0.18);
           ctx.lineCap = "round";
-          ctx.lineJoin = "round";
-
           for (let j = 0; j < 6; j++) {
-            // Draw main stem
             ctx.beginPath();
             ctx.moveTo(0, 0);
             ctx.lineTo(0, -r);
             ctx.stroke();
-
-            // Inner chevron branches (meeting adjacent ones close to center)
             ctx.beginPath();
-            ctx.moveTo(0, -r * 0.45);
-            ctx.lineTo(-r * 0.25, -r * 0.65);
-            ctx.moveTo(0, -r * 0.45);
-            ctx.lineTo(r * 0.25, -r * 0.65);
+            ctx.moveTo(0, -r * 0.5);
+            ctx.lineTo(-r * 0.22, -r * 0.68);
+            ctx.moveTo(0, -r * 0.5);
+            ctx.lineTo(r * 0.22, -r * 0.68);
             ctx.stroke();
-
-            // Outer chevron branches (smaller near the tip)
-            ctx.beginPath();
-            ctx.moveTo(0, -r * 0.75);
-            ctx.lineTo(-r * 0.15, -r * 0.88);
-            ctx.moveTo(0, -r * 0.75);
-            ctx.lineTo(r * 0.15, -r * 0.88);
-            ctx.stroke();
-
-            // Rotate 60 degrees for the next arm
             ctx.rotate(Math.PI / 3);
           }
 

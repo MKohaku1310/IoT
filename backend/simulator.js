@@ -26,7 +26,7 @@ client.on('connect', () => {
     client.publish(TOPICS.TEMP, String(temp), { qos: 1 });
     client.publish(TOPICS.HUM, String(hum), { qos: 1 });
     client.publish(TOPICS.LUX, String(lux), { qos: 1 });
-  }, 5000);
+  }, 20000);
 });
 
 client.on('error', (err) => {

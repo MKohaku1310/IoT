@@ -240,6 +240,18 @@ function Dashboard() {
   // Trạng thái cảnh báo của lần đọc trước: phát hiện sự kiện "vừa vượt ngưỡng"
   const prevAlertStateRef = useRef<Record<string, boolean>>({ temp: false, humid: false, light: false });
 
+  // Refs to avoid stale closures inside supabase event callbacks
+  const thresholdsRef = useRef(thresholds);
+  const currentUserIdRef = useRef(currentUserId);
+
+  useEffect(() => {
+    thresholdsRef.current = thresholds;
+  }, [thresholds]);
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
+
   // Live sensor / db realtime sync
   useEffect(() => {
     let active = true;
@@ -448,10 +460,11 @@ function Dashboard() {
             //   (B) Đã vượt ngưỡng liên tục nhưng đã qua ALERT_COOLDOWN_MS kể từ lần báo cuối
             // ==========================================
             const now = Date.now();
+            const currentThresholds = thresholdsRef.current;
             const curState = {
-              temp: temp >= (thresholds.temp || 30),
-              humid: humid >= (thresholds.humid || 75),
-              light: light < (thresholds.light || 200),
+              temp: temp >= (currentThresholds.temp || 30),
+              humid: humid >= (currentThresholds.humid || 75),
+              light: light < (currentThresholds.light || 200),
             };
             const prev = prevAlertStateRef.current;
             const cooldown = alertCooldownRef.current;
@@ -460,21 +473,21 @@ function Dashboard() {
               {
                 key: "temp",
                 triggered: curState.temp,
-                msg: `Cảnh báo vượt ngưỡng: Nhiệt độ ${temp}°C vượt ngưỡng ${thresholds.temp}°C`,
+                msg: `Nhiệt độ ${temp}°C vượt ngưỡng ${currentThresholds.temp || 30}°C`,
               },
               {
                 key: "humid",
                 triggered: curState.humid,
-                msg: `Cảnh báo vượt ngưỡng: Độ ẩm ${humid}% vượt ngưỡng ${thresholds.humid}%`,
+                msg: `Độ ẩm ${humid}% vượt ngưỡng ${currentThresholds.humid || 75}%`,
               },
               {
                 key: "light",
                 triggered: curState.light,
-                msg: `Cảnh báo vượt ngưỡng: Ánh sáng ${light} lx dưới ngưỡng ${thresholds.light} lx`,
+                msg: `Ánh sáng ${light} lx dưới ngưỡng ${currentThresholds.light || 200} lx`,
               },
             ];
 
-            const alertsToCreate: { idnguoidung?: number; hanhdong: string }[] = [];
+            const localAlerts: Alert[] = [];
 
             for (const c of checks) {
               if (!c.triggered) {
@@ -488,22 +501,32 @@ function Dashboard() {
               const isCooldownOver = (now - (cooldown[c.key] || 0)) >= ALERT_COOLDOWN_MS;
 
               if (isEdge || isCooldownOver) {
-                alertsToCreate.push({
-                  ...(currentUserId ? { idnguoidung: currentUserId } : {}),
-                  hanhdong: c.msg,
+                localAlerts.push({
+                  id: Date.now() + Math.random(),
+                  ts: Date.now(),
+                  title: "Cảnh báo vượt ngưỡng",
+                  detail: c.msg,
+                  level: "warn",
                 });
                 cooldown[c.key] = now;
               }
               prev[c.key] = true;
             }
 
-            // Ghi cảnh báo vào database (chỉ khi thực sự cần)
-            for (const alert of alertsToCreate) {
-              try {
-                await supabase.from("nhatkyhoatdong").insert([alert]);
-              } catch (err) {
-                console.error("Lỗi khi tạo cảnh báo:", err);
-              }
+            // Thay vì ghi vào database (gây spam/lag khi mở nhiều tab), chỉ hiển thị thông báo trực tiếp trên UI
+            if (localAlerts.length > 0) {
+              setAlerts((prevAlerts) => {
+                const nextAlerts = [...localAlerts, ...prevAlerts];
+                return nextAlerts.slice(0, 15);
+              });
+              setBellPing(true);
+              setTimeout(() => setBellPing(false), 2000);
+              localAlerts.forEach((alert) => {
+                toast(alert.title, {
+                  description: alert.detail,
+                  className: "!border-amber-200",
+                });
+              });
             }
           }
         }

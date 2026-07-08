@@ -42,7 +42,7 @@ bool lastAutoMode2State = true;
 bool lastAutoMode3State = true;
 
 unsigned long lastRead = 0;
-const unsigned long READ_INTERVAL = 2000; // Đọc cảm biến và gửi dữ liệu mỗi 2 giây
+const unsigned long READ_INTERVAL = 20000; // Đọc cảm biến và gửi dữ liệu mỗi 20 giây
 
 // ===== HÀM KẾT NỐI WIFI =====
 void setup_wifi() {

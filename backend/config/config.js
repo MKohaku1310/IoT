@@ -48,11 +48,11 @@ const TOPICS = {
 // Cấu hình các ngưỡng giới hạn kiểm tra dữ liệu và bộ lọc
 const SETTINGS = {
   // Khoảng thời gian lệch tối đa giữa các gói tin để gom cụm cảm biến (ms)
-  BUFFER_TIMEOUT_MS: 5000,
+  BUFFER_TIMEOUT_MS: 2000,
   
   // Thời gian chờ tối thiểu giữa các lần kích hoạt tự động cùng một thiết bị (ms)
   // Tránh việc Relay thật bật/tắt liên hồi gây hỏng phần cứng
-  AUTOMATION_COOLDOWN_MS: 10000, 
+  AUTOMATION_COOLDOWN_MS: 5000, 
   
   // Ngưỡng dữ liệu cảm biến hợp lệ để lọc nhiễu dị thường
   LIMITS: {
