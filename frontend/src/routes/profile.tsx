@@ -178,7 +178,7 @@ function ProfilePage() {
             thoigian: new Date().toISOString()
           });
           toast.warning(
-            "Chưa thể lưu hồ sơ vào database. Vui lòng thêm RLS policy cho bảng 'nguoidung' trên Supabase Dashboard.",
+            `Không thể lưu hồ sơ: ${insertError.message}. Nếu do RLS, vui lòng kiểm tra policy; nếu do Primary Key, vui lòng bật tự động tăng ID (Serial).`,
             { duration: 8000 }
           );
         } else if (insertedData) {
