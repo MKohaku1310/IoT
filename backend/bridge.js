@@ -241,6 +241,16 @@ function startBridge() {
 // Chạy ứng dụng
 startBridge();
 
+// Tạo HTTP Server ảo để chạy trên Render (Tránh lỗi Health Check)
+const http = require('http');
+const PORT = process.env.PORT || 10000;
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Smart Home IoT Bridge is running!\n');
+}).listen(PORT, () => {
+  logger.info(`Virtual HTTP Server listening on port ${PORT}`);
+});
+
 // Dọn dẹp tài nguyên khi tắt chương trình
 process.on('SIGINT', () => {
   logger.info('Đang tắt tiến trình Bridge...');
