@@ -185,6 +185,38 @@ function Dashboard() {
   const [sensors, setSensors] = useState<Sensors>({ temp: 0, humid: 0, light: 0 });
   const [sensorHistory, setSensorHistory] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [readAlertIds, setReadAlertIds] = useState<number[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = window.localStorage.getItem("sh-read-alerts");
+        return stored ? JSON.parse(stored) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+
+  const saveReadAlertIds = (ids: number[]) => {
+    setReadAlertIds(ids);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem("sh-read-alerts", JSON.stringify(ids));
+      } catch {}
+    }
+  };
+
+  const markAsRead = (id: number) => {
+    if (!readAlertIds.includes(id)) {
+      saveReadAlertIds([...readAlertIds, id]);
+    }
+  };
+
+  const markAllAsRead = (ids: number[]) => {
+    const newRead = Array.from(new Set([...readAlertIds, ...ids]));
+    saveReadAlertIds(newRead);
+  };
+
   const [bellPing, setBellPing] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ hoten: string; email: string; idnguoidung?: number } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
@@ -657,7 +689,7 @@ function Dashboard() {
           node={node}
           setNodeId={setNodeId}
           dark={dark}
-          alertCount={alerts.length}
+          alertCount={alerts.filter((a) => !readAlertIds.includes(a.id)).length}
           sensorOnline={sensorOnline}
           onCloseMobile={() => setMobileSidebarOpen(false)}
           className={cn(
@@ -675,7 +707,7 @@ function Dashboard() {
           node={node}
           setNodeId={setNodeId}
           dark={dark}
-          alertCount={alerts.length}
+          alertCount={alerts.filter((a) => !readAlertIds.includes(a.id)).length}
           sensorOnline={sensorOnline}
           className="hidden lg:flex sticky top-0 h-screen"
         />
@@ -685,6 +717,9 @@ function Dashboard() {
             title={title}
             nodeName={node.name}
             alerts={alerts}
+            readAlertIds={readAlertIds}
+            onMarkAsRead={markAsRead}
+            onMarkAllAsRead={markAllAsRead}
             bellPing={bellPing}
             onOpen={() => setBellPing(false)}
             dark={dark}
@@ -710,7 +745,13 @@ function Dashboard() {
             {tab === "sensors" && <SensorsTab />}
             {tab === "schedule" && <ScheduleTab />}
             {tab === "activity" && <ActivityTab />}
-            {tab === "notifications" && <NotificationsTab />}
+            {tab === "notifications" && (
+              <NotificationsTab
+                readAlertIds={readAlertIds}
+                onMarkAsRead={markAsRead}
+                onMarkAllAsRead={markAllAsRead}
+              />
+            )}
             {tab === "health" && <HealthTab />}
             {tab === "settings" && <SettingsTab />}
           </div>
@@ -867,6 +908,9 @@ function Header({
   title,
   nodeName,
   alerts,
+  readAlertIds,
+  onMarkAsRead,
+  onMarkAllAsRead,
   bellPing,
   onOpen,
   dark,
@@ -879,6 +923,9 @@ function Header({
   title: string;
   nodeName: string;
   alerts: Alert[];
+  readAlertIds: number[];
+  onMarkAsRead: (id: number) => void;
+  onMarkAllAsRead: (ids: number[]) => void;
   bellPing: boolean;
   onOpen: () => void;
   dark: boolean;
@@ -888,6 +935,8 @@ function Header({
   onMenuClick?: () => void;
   lastSensorTime?: Date | null;
 }) {
+  const unreadAlerts = alerts.filter((a) => !readAlertIds.includes(a.id));
+
   return (
     <header
       className={cn(
@@ -958,27 +1007,46 @@ function Header({
         <DropdownMenuTrigger asChild>
           <button
             className={cn(
-              "relative grid h-10 w-10 place-items-center rounded-xl border border-white/70 bg-white/80 text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900",
+              "relative grid h-10 w-10 place-items-center rounded-xl border border-white/70 bg-white/80 text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 cursor-pointer",
               bellPing && "animate-[bell-shake_0.6s_ease-in-out]",
             )}
           >
             <Bell className="h-4 w-4" />
-            {alerts.length > 0 && (
+            {unreadAlerts.length > 0 && (
               <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
-                {alerts.length}
+                {unreadAlerts.length}
                 {bellPing && <span className="absolute inset-0 animate-ping rounded-full bg-rose-500 opacity-70" />}
               </span>
             )}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-80">
-          <DropdownMenuLabel>Cảnh báo gần đây</DropdownMenuLabel>
+          <DropdownMenuLabel className="flex items-center justify-between">
+            <span>Cảnh báo gần đây</span>
+            {unreadAlerts.length > 0 && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onMarkAllAsRead(unreadAlerts.map((a) => a.id));
+                }}
+                className="text-[10px] text-indigo-600 hover:text-indigo-800 hover:underline font-semibold cursor-pointer border-0 bg-transparent p-0 outline-none"
+              >
+                Đọc tất cả
+              </button>
+            )}
+          </DropdownMenuLabel>
           <DropdownMenuSeparator />
           {alerts.length === 0 && (
             <div className="px-3 py-4 text-center text-xs text-slate-500">Chưa có cảnh báo</div>
           )}
           {alerts.slice(0, 6).map((a) => (
-            <AlertItem key={a.id} alert={a} />
+            <AlertItem
+              key={a.id}
+              alert={a}
+              isRead={readAlertIds.includes(a.id)}
+              onMark={() => onMarkAsRead(a.id)}
+            />
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -1070,14 +1138,33 @@ function LiveClock() {
   );
 }
 
-function AlertItem({ alert }: { alert: Alert }) {
+function AlertItem({
+  alert,
+  isRead,
+  onMark,
+}: {
+  alert: Alert;
+  isRead: boolean;
+  onMark: () => void;
+}) {
   const rel = useRelativeTime(alert.ts);
   return (
-    <DropdownMenuItem className="flex flex-col items-start gap-0.5">
-      <span className={cn("font-medium", alert.level === "error" ? "text-rose-600" : "text-amber-600")}>
-        {alert.title}
-      </span>
-      <span className="text-xs text-slate-500">
+    <DropdownMenuItem
+      className={cn(
+        "flex flex-col items-start gap-0.5 cursor-pointer transition-colors duration-200",
+        isRead ? "opacity-60" : "bg-indigo-50/20 font-semibold"
+      )}
+      onClick={(e) => {
+        onMark();
+      }}
+    >
+      <div className="flex w-full items-center justify-between">
+        <span className={cn("text-sm font-medium", isRead ? "text-slate-500" : alert.level === "error" ? "text-rose-600 font-semibold" : "text-amber-600 font-semibold")}>
+          {alert.title}
+        </span>
+        {!isRead && <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 ml-2" />}
+      </div>
+      <span className="text-xs text-slate-500 leading-normal">
         {rel} · {alert.detail}
       </span>
     </DropdownMenuItem>
@@ -2760,10 +2847,20 @@ function ScheduleTab() {
 
 
 /* -------------------- Notifications Tab -------------------- */
-function NotificationsTab() {
+function NotificationsTab({
+  readAlertIds,
+  onMarkAsRead,
+  onMarkAllAsRead,
+}: {
+  readAlertIds: number[];
+  onMarkAsRead: (id: number) => void;
+  onMarkAllAsRead: (ids: number[]) => void;
+}) {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "error" | "warn" | "info">("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     async function fetchAll() {
@@ -2792,11 +2889,15 @@ function NotificationsTab() {
     return () => { supabase.removeChannel(chan); };
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, pageSize]);
+
   const mapped = useMemo(() => logs.map((l) => {
     const isError = l.hanhdong.includes("Lỗi") || l.hanhdong.includes("Mất kết nối");
     const isWarn = l.hanhdong.includes("vượt ngưỡng") || l.hanhdong.includes("Cảnh báo");
     const level: "error" | "warn" | "info" = isError ? "error" : isWarn ? "warn" : "info";
-    return { id: l.idnhatky, ts: Date.parse(l.thoigian), detail: l.hanhdong, level, isoTime: l.thoigian };
+    return { id: Number(l.idnhatky), ts: Date.parse(l.thoigian), detail: l.hanhdong, level, isoTime: l.thoigian };
   }), [logs]);
 
   const filtered = useMemo(() => filter === "all" ? mapped : mapped.filter((n) => n.level === filter), [mapped, filter]);
@@ -2807,6 +2908,13 @@ function NotificationsTab() {
     warn: mapped.filter((n) => n.level === "warn").length,
     info: mapped.filter((n) => n.level === "info").length,
   }), [mapped]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   const FILTERS: { key: "all" | "error" | "warn" | "info"; label: string; color: string }[] = [
     { key: "all", label: "Tất cả", color: "from-indigo-500 to-sky-500" },
@@ -2824,7 +2932,7 @@ function NotificationsTab() {
             key={f.key}
             onClick={() => setFilter(f.key)}
             className={cn(
-              "relative overflow-hidden rounded-2xl border p-4 text-left transition-all",
+              "relative overflow-hidden rounded-2xl border p-4 text-left transition-all cursor-pointer",
               filter === f.key
                 ? "border-transparent ring-2 ring-indigo-400 shadow-lg bg-white"
                 : "border-white/60 bg-white/60 backdrop-blur-md shadow-sm hover:bg-white/80"
@@ -2838,19 +2946,31 @@ function NotificationsTab() {
       </div>
 
       <GlassCard className="p-0 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <div className="flex flex-wrap items-center justify-between px-5 py-4 border-b border-slate-100 gap-3">
           <div>
             <h3 className="text-base font-semibold text-slate-900">Trung tâm thông báo</h3>
             <p className="text-xs text-slate-500 mt-0.5">
               {filtered.length} thông báo · Cập nhật realtime
             </p>
           </div>
-          <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-            </span>
-            <span className="text-[11px] font-medium text-emerald-700">Live</span>
+          <div className="flex items-center gap-3">
+            {filtered.some((n) => !readAlertIds.includes(n.id)) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onMarkAllAsRead(filtered.filter((n) => !readAlertIds.includes(n.id)).map((n) => n.id))}
+                className="text-xs border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 cursor-pointer h-8"
+              >
+                Đọc tất cả
+              </Button>
+            )}
+            <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="text-[11px] font-medium text-emerald-700">Live</span>
+            </div>
           </div>
         </div>
 
@@ -2873,42 +2993,128 @@ function NotificationsTab() {
           </div>
         ) : (
           <ul className="divide-y divide-slate-100/80">
-            {filtered.map((n) => (
-              <NotifItem key={n.id} notif={n} />
+            {paginatedData.map((n) => (
+              <NotifItem
+                key={n.id}
+                notif={n}
+                isRead={readAlertIds.includes(n.id)}
+                onMark={() => onMarkAsRead(n.id)}
+              />
             ))}
           </ul>
+        )}
+
+        {/* Pagination Controller */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-slate-200/70 p-4 bg-slate-50/30 text-xs text-slate-500">
+            <div className="flex items-center gap-4">
+              <span>
+                Hiển thị <b>{Math.min(filtered.length, (currentPage - 1) * pageSize + 1)}</b> đến{" "}
+                <b>{Math.min(filtered.length, currentPage * pageSize)}</b> trong tổng số{" "}
+                <b>{filtered.length}</b> bản ghi
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span>Số dòng:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="rounded border border-slate-200 bg-white px-2 py-1 text-slate-700 outline-none cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="h-8 px-2.5 cursor-pointer"
+              >
+                Trước
+              </Button>
+              <span className="font-medium text-slate-600">
+                Trang {currentPage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="h-8 px-2.5 cursor-pointer"
+              >
+                Sau
+              </Button>
+            </div>
+          </div>
         )}
       </GlassCard>
     </div>
   );
 }
 
-function NotifItem({ notif }: { notif: { id: any; ts: number; detail: string; level: "error" | "warn" | "info"; isoTime: string } }) {
+function NotifItem({
+  notif,
+  isRead,
+  onMark,
+}: {
+  notif: { id: any; ts: number; detail: string; level: "error" | "warn" | "info"; isoTime: string };
+  isRead: boolean;
+  onMark: () => void;
+}) {
   const rel = useRelativeTime(notif.ts);
   const timeStr = new Date(notif.ts).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
   const cfg = notif.level === "error"
-    ? { icon: AlertTriangle, gradient: "from-rose-500 to-pink-500", badge: "bg-rose-100 text-rose-700", bg: "hover:bg-rose-50/30" }
+    ? { icon: AlertTriangle, gradient: "from-rose-500 to-pink-500", badge: "bg-rose-100 text-rose-700", bg: isRead ? "hover:bg-slate-100/50" : "bg-rose-50/20 hover:bg-rose-50/40" }
     : notif.level === "warn"
-    ? { icon: AlertTriangle, gradient: "from-amber-500 to-orange-400", badge: "bg-amber-100 text-amber-700", bg: "hover:bg-amber-50/30" }
-    : { icon: CheckCircle2, gradient: "from-emerald-500 to-teal-400", badge: "bg-emerald-100 text-emerald-700", bg: "hover:bg-emerald-50/20" };
+    ? { icon: AlertTriangle, gradient: "from-amber-500 to-orange-400", badge: "bg-amber-100 text-amber-700", bg: isRead ? "hover:bg-slate-100/50" : "bg-amber-50/20 hover:bg-amber-50/40" }
+    : { icon: CheckCircle2, gradient: "from-emerald-500 to-teal-400", badge: "bg-emerald-100 text-emerald-700", bg: isRead ? "hover:bg-slate-100/50" : "bg-emerald-50/10 hover:bg-emerald-50/20" };
 
   const Icon = cfg.icon;
 
   return (
-    <li className={cn("flex items-start gap-4 px-5 py-4 transition", cfg.bg)}>
-      <div className={cn("mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-white shadow-md", cfg.gradient)}>
+    <li className={cn("flex items-start gap-4 px-5 py-4 transition relative", cfg.bg, !isRead && "font-medium")}>
+      {!isRead && (
+        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-indigo-500 shadow-md shadow-indigo-500/50" />
+      )}
+      <div className={cn(
+        "mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-white shadow-md transition-all duration-300", 
+        cfg.gradient,
+        isRead && "opacity-60 grayscale"
+      )}>
         <Icon className="h-5 w-5" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-slate-800 leading-snug">{notif.detail}</p>
+        <p className={cn("text-sm leading-snug transition-colors duration-300", isRead ? "text-slate-500" : "text-slate-800 font-semibold")}>
+          {notif.detail}
+        </p>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {rel}</span>
           <span>·</span>
           <span className="tabular-nums">{timeStr}</span>
-          <span className={cn("ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold", cfg.badge)}>
-            {notif.level === "error" ? "Lỗi" : notif.level === "warn" ? "Cảnh báo" : "Thông tin"}
-          </span>
+          <div className="ml-auto flex items-center gap-2">
+            {!isRead && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  onMark();
+                }}
+                className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+              >
+                Đã đọc
+              </button>
+            )}
+            <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", cfg.badge)}>
+              {notif.level === "error" ? "Lỗi" : notif.level === "warn" ? "Cảnh báo" : "Thông tin"}
+            </span>
+          </div>
         </div>
       </div>
     </li>
