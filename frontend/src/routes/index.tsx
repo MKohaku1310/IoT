@@ -656,7 +656,7 @@ function Dashboard() {
             onMenuClick={() => setMobileSidebarOpen(true)}
             lastSensorTime={lastSensorTime}
           />
-          <div className="flex-1 p-6 lg:p-8">
+          <div className="flex-1 p-3 sm:p-6 lg:p-8">
             {tab === "dashboard" && (
               <DashboardTab
                 devices={devices}
@@ -1140,33 +1140,57 @@ function DashboardTab({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+      <div className="grid grid-cols-3 gap-3 sm:gap-5">
         {sensorCards.map((s) => {
           const Icon = s.icon;
           return (
-            <GlassCard key={s.key}>
-              <div className="flex items-start justify-between">
-                <div className={cn("grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br text-white shadow-lg", s.color)}>
-                  <Icon className="h-5 w-5" />
-                </div>
-                <Badge
-                  className={cn(
-                    "rounded-full border-transparent text-xs font-medium",
-                    s.alert
-                      ? "bg-rose-100 text-rose-700 hover:bg-rose-100"
-                      : "bg-emerald-100 text-emerald-700 hover:bg-emerald-100",
-                  )}
-                >
-                  {s.alert ? "Vượt ngưỡng" : "Bình thường"}
-                </Badge>
-              </div>
-              <div className="mt-6">
-                <div className="text-sm text-slate-500">{s.label}</div>
-                <div className="mt-1 flex items-baseline gap-1.5">
-                  <span className="text-4xl font-bold tracking-tight text-slate-900 tabular-nums">
-                    {s.value}
+            <GlassCard key={s.key} className="p-3 sm:p-5">
+              {/* Mobile: compact stacked layout */}
+              <div className="flex flex-col gap-2 sm:hidden">
+                <div className="flex items-center justify-between">
+                  <div className={cn("grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br text-white shadow-md", s.color)}>
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <span className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-tight",
+                    s.alert ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"
+                  )}>
+                    {s.alert ? "⚠ Vượt" : "✓ OK"}
                   </span>
-                  <span className="text-base font-medium text-slate-500">{s.unit}</span>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-500">{s.label}</div>
+                  <div className="flex items-baseline gap-0.5">
+                    <span className="text-xl font-bold tracking-tight text-slate-900 tabular-nums">{s.value}</span>
+                    <span className="text-xs font-medium text-slate-500">{s.unit}</span>
+                  </div>
+                </div>
+              </div>
+              {/* Desktop: original layout */}
+              <div className="hidden sm:block">
+                <div className="flex items-start justify-between">
+                  <div className={cn("grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br text-white shadow-lg", s.color)}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <Badge
+                    className={cn(
+                      "rounded-full border-transparent text-xs font-medium",
+                      s.alert
+                        ? "bg-rose-100 text-rose-700 hover:bg-rose-100"
+                        : "bg-emerald-100 text-emerald-700 hover:bg-emerald-100",
+                    )}
+                  >
+                    {s.alert ? "Vượt ngưỡng" : "Bình thường"}
+                  </Badge>
+                </div>
+                <div className="mt-6">
+                  <div className="text-sm text-slate-500">{s.label}</div>
+                  <div className="mt-1 flex items-baseline gap-1.5">
+                    <span className="text-4xl font-bold tracking-tight text-slate-900 tabular-nums">
+                      {s.value}
+                    </span>
+                    <span className="text-base font-medium text-slate-500">{s.unit}</span>
+                  </div>
                 </div>
               </div>
             </GlassCard>
@@ -1174,7 +1198,7 @@ function DashboardTab({
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+      <div className="grid grid-cols-3 gap-3 sm:gap-5">
         <DeviceCard
           name="Điều hòa"
           icon={Wind}
@@ -1298,51 +1322,96 @@ function DeviceCard({
           style={{ background: "radial-gradient(circle at center, rgba(251,191,36,0.55), transparent 70%)" }}
         />
       )}
-      <GlassCard className="relative">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div
+      <GlassCard className="relative p-3 sm:p-5">
+        {/* Mobile compact layout */}
+        <div className="flex flex-col items-center gap-2 sm:hidden">
+          <div
+            className={cn(
+              "grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br text-white shadow-md transition",
+              gradient,
+              !state.on && "opacity-40 grayscale",
+            )}
+          >
+            <Icon
               className={cn(
-                "grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br text-white shadow-lg transition",
-                gradient,
-                !state.on && "opacity-40 grayscale",
+                "h-4 w-4",
+                spinIcon && "animate-spin",
+                !spinIcon && !acBreeze && state.on && "animate-pulse",
               )}
-            >
-              <Icon
-                className={cn(
-                  "h-5 w-5",
-                  spinIcon && "animate-spin",
-                  !spinIcon && !acBreeze && state.on && "animate-pulse",
-                )}
-                style={{
-                  ...(spinIcon ? { animationDuration: "1.4s" } : {}),
-                  ...(acBreeze ? { animation: "wind-sway 1.6s ease-in-out infinite" } : {}),
-                }}
-              />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-slate-900">{name}</div>
-              <div className={cn("mt-0.5 text-xs font-medium", state.on ? "text-emerald-600" : "text-slate-400")}>
-                {state.on ? "● Đang BẬT" : "○ Đang TẮT"}
-              </div>
+              style={{
+                ...(spinIcon ? { animationDuration: "1.4s" } : {}),
+                ...(acBreeze ? { animation: "wind-sway 1.6s ease-in-out infinite" } : {}),
+              }}
+            />
+          </div>
+          <div className="text-center">
+            <div className="text-xs font-semibold text-slate-900 leading-tight">{name}</div>
+            <div className={cn("text-[10px] font-medium", state.on ? "text-emerald-600" : "text-slate-400")}>
+              {state.on ? "BẬT" : "TẮT"}
             </div>
           </div>
           <Switch checked={state.on} onCheckedChange={onToggle} />
+          <div className="w-full grid grid-cols-2 gap-1 rounded-lg bg-slate-100/80 p-0.5">
+            {(["manual", "auto"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => onMode(m)}
+                className={cn(
+                  "rounded-md py-1 text-[10px] font-medium transition-all",
+                  state.mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500",
+                )}
+              >
+                {m === "manual" ? "TC" : "TĐ"}
+              </button>
+            ))}
+          </div>
         </div>
-
-        <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-slate-100/80 p-1">
-          {(["manual", "auto"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => onMode(m)}
-              className={cn(
-                "rounded-lg py-1.5 text-xs font-medium transition-all",
-                state.mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700",
-              )}
-            >
-              {m === "manual" ? "Thủ công" : "Tự động"}
-            </button>
-          ))}
+        {/* Desktop layout */}
+        <div className="hidden sm:block">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div
+                className={cn(
+                  "grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br text-white shadow-lg transition",
+                  gradient,
+                  !state.on && "opacity-40 grayscale",
+                )}
+              >
+                <Icon
+                  className={cn(
+                    "h-5 w-5",
+                    spinIcon && "animate-spin",
+                    !spinIcon && !acBreeze && state.on && "animate-pulse",
+                  )}
+                  style={{
+                    ...(spinIcon ? { animationDuration: "1.4s" } : {}),
+                    ...(acBreeze ? { animation: "wind-sway 1.6s ease-in-out infinite" } : {}),
+                  }}
+                />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-slate-900">{name}</div>
+                <div className={cn("mt-0.5 text-xs font-medium", state.on ? "text-emerald-600" : "text-slate-400")}>
+                  {state.on ? "● Đang BẬT" : "○ Đang TẮT"}
+                </div>
+              </div>
+            </div>
+            <Switch checked={state.on} onCheckedChange={onToggle} />
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-slate-100/80 p-1">
+            {(["manual", "auto"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => onMode(m)}
+                className={cn(
+                  "rounded-lg py-1.5 text-xs font-medium transition-all",
+                  state.mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700",
+                )}
+              >
+                {m === "manual" ? "Thủ công" : "Tự động"}
+              </button>
+            ))}
+          </div>
         </div>
       </GlassCard>
     </div>
