@@ -646,7 +646,7 @@ function Sidebar({
   return (
     <aside
       className={cn(
-        "flex w-72 shrink-0 flex-col gap-6 p-5 border-r backdrop-blur-xl",
+        "flex w-64 shrink-0 flex-col gap-3 p-4 border-r backdrop-blur-xl overflow-y-auto",
         dark ? "border-white/10 bg-slate-950/40" : "border-white/60 bg-white/60",
         className
       )}
@@ -722,14 +722,14 @@ function Sidebar({
         })}
       </nav>
 
-      <div className={cn("rounded-2xl border p-3 text-xs", dark ? "border-white/10 bg-white/5 text-slate-200" : "border-white/70 bg-gradient-to-br from-indigo-50/70 to-sky-50/70 text-slate-700")}>
-        <div className="flex items-center gap-2 font-medium">
+      <div className={cn("rounded-2xl border p-3", dark ? "border-white/10 bg-white/5 text-slate-200" : "border-white/70 bg-gradient-to-br from-indigo-50/70 to-sky-50/70 text-slate-700")}>
+        <div className="flex items-center gap-2 font-medium text-xs">
           <Moon className="h-3.5 w-3.5" /> {todLabel}
         </div>
-        <div className={cn("mt-0.5 text-[11px]", dark ? "text-slate-400" : "text-slate-500")}>Giao diện theo giờ hệ thống</div>
+        <div className={cn("mt-0.5 text-[10px]", dark ? "text-slate-400" : "text-slate-500")}>Giao diện theo giờ hệ thống</div>
       </div>
 
-      <div className={cn("mt-auto rounded-2xl border p-4 shadow-sm backdrop-blur", dark ? "border-white/10 bg-white/5" : "border-white/70 bg-white/70")}>
+      <div className={cn("rounded-2xl border p-3 shadow-sm backdrop-blur", dark ? "border-white/10 bg-white/5" : "border-white/70 bg-white/70")}>
         <div className={cn("mb-3 text-[11px] font-semibold uppercase tracking-wider", dark ? "text-slate-400" : "text-slate-500")}>
           Trạng thái kết nối
         </div>
