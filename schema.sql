@@ -136,10 +136,42 @@ ALTER TABLE nguoidung      DISABLE ROW LEVEL SECURITY;
 ALTER TABLE lichhengio     DISABLE ROW LEVEL SECURITY;
 
 -- ============================================================
--- 11. [FIX #2] Bật Realtime cho các bảng cần thiết
+-- 11. [FIX #2] Bật Realtime cho các bảng cần thiết (Bọc trong khối DO để tránh lỗi nếu đã tồn tại)
 -- ============================================================
-ALTER PUBLICATION supabase_realtime ADD TABLE den;
-ALTER PUBLICATION supabase_realtime ADD TABLE luat;
-ALTER PUBLICATION supabase_realtime ADD TABLE nhatkyhoatdong;
-ALTER PUBLICATION supabase_realtime ADD TABLE dulieucambien;
-ALTER PUBLICATION supabase_realtime ADD TABLE lichhengio;
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE den;
+  EXCEPTION
+    WHEN duplicate_object THEN
+      RAISE NOTICE 'Table den is already a member of publication';
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE luat;
+  EXCEPTION
+    WHEN duplicate_object THEN
+      RAISE NOTICE 'Table luat is already a member of publication';
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE nhatkyhoatdong;
+  EXCEPTION
+    WHEN duplicate_object THEN
+      RAISE NOTICE 'Table nhatkyhoatdong is already a member of publication';
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE dulieucambien;
+  EXCEPTION
+    WHEN duplicate_object THEN
+      RAISE NOTICE 'Table dulieucambien is already a member of publication';
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE lichhengio;
+  EXCEPTION
+    WHEN duplicate_object THEN
+      RAISE NOTICE 'Table lichhengio is already a member of publication';
+  END;
+END $$;
