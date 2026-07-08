@@ -2948,7 +2948,7 @@ function LandingPage({ dark, toggleDark }: { dark: boolean; toggleDark: () => vo
 
       {/* Footer */}
       <footer className="max-w-7xl w-full mx-auto border-t border-slate-200/50 dark:border-white/10 pt-6 mt-10 text-center text-xs text-slate-500 dark:text-slate-400">
-        © 2026 Smart Home IoT Project · Phát triển bởi <span className="font-semibold text-slate-700 dark:text-slate-200">Đặng Trần Hải Đăng</span>
+        © 2026 Smart Home IoT Project · Phát triển bởi <span className="font-semibold text-slate-700 dark:text-slate-200">Bùi Văn Sang</span>
       </footer>
     </div>
   );

@@ -76,7 +76,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Smart Home Control | Cổng IoT ESP32-S3" },
       { name: "description", content: "Bảng điều khiển giám sát và điều khiển Smart Home qua cổng IoT ESP32-S3: cảm biến, thiết bị, lịch sử và cài đặt ngưỡng tự động." },
-      { name: "author", content: "Đặng Trần Hải Đăng" },
+      { name: "author", content: "Bùi Văn Sang" },
       { property: "og:title", content: "Smart Home Control | Cổng IoT ESP32-S3" },
       { property: "og:description", content: "Bảng điều khiển giám sát và điều khiển Smart Home qua cổng IoT ESP32-S3: cảm biến, thiết bị, lịch sử và cài đặt ngưỡng tự động." },
       { property: "og:type", content: "website" },

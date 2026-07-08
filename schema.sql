@@ -61,7 +61,7 @@ CREATE TABLE nhatkyhoatdong (
 -- 7. Khởi tạo dữ liệu mặc định (Seed Data)
 -- Khởi tạo người dùng mặc định
 INSERT INTO nguoidung (idnguoidung, hoten, email, anhdaidien, ngaysinh, sodienthoai, github, figma, linkpdf) VALUES
-(1, 'Đặng Trần Hải Đăng', 'bundeeptry115@gmail.com', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop', '2004-05-11', '033 429 6045', 'HaiDangDeptrai', 'Đặng Trần Hải Đăng', '')
+(1, 'Bùi Văn Sang', 'sang@gmail.com', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200&auto=format&fit=crop', '2004-01-01', '0987654321', 'BuiVanSang', 'Bùi Văn Sang', '')
 ON CONFLICT (idnguoidung) DO NOTHING;
 
 -- Khởi tạo 3 thiết bị LED
