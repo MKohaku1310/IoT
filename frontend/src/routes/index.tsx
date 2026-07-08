@@ -193,6 +193,10 @@ function Dashboard() {
     humid: 75,
     light: 200,
   });
+  // Thời điểm nhận gói cảm biến cuối cùng
+  const [lastSensorTime, setLastSensorTime] = useState<Date | null>(null);
+  // Trạng thái online/offline của thiết bị
+  const [sensorOnline, setSensorOnline] = useState(false);
 
   // Live sensor / db realtime sync
   useEffect(() => {
@@ -359,6 +363,8 @@ function Dashboard() {
               humid: Number(record.doam),
               light: Number(record.anhsang),
             });
+            setLastSensorTime(new Date());
+            setSensorOnline(true);
           }
         }
       )
@@ -427,6 +433,16 @@ function Dashboard() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Theo dõi timeout thiết bị: nếu 30 giây không có gói mới → Offline
+  useEffect(() => {
+    if (!lastSensorTime) return;
+    setSensorOnline(true);
+    const timer = setTimeout(() => {
+      setSensorOnline(false);
+    }, 30_000);
+    return () => clearTimeout(timer);
+  }, [lastSensorTime]);
 
   const handleDeviceToggle = async (key: "ac" | "fan" | "light", idden: number, on: boolean) => {
     const dev = devices[key];
@@ -562,6 +578,7 @@ function Dashboard() {
           setNodeId={setNodeId}
           dark={dark}
           alertCount={alerts.length}
+          sensorOnline={sensorOnline}
           onCloseMobile={() => setMobileSidebarOpen(false)}
           className={cn(
             "fixed inset-y-0 left-0 z-50 h-full border-r shadow-2xl transition-transform duration-300 transform lg:hidden",
@@ -579,6 +596,7 @@ function Dashboard() {
           setNodeId={setNodeId}
           dark={dark}
           alertCount={alerts.length}
+          sensorOnline={sensorOnline}
           className="hidden lg:flex"
         />
 
@@ -594,6 +612,7 @@ function Dashboard() {
             openPalette={() => setPaletteOpen(true)}
             currentUser={currentUser}
             onMenuClick={() => setMobileSidebarOpen(true)}
+            lastSensorTime={lastSensorTime}
           />
           <div className="flex-1 p-6 lg:p-8">
             {tab === "dashboard" && (
@@ -632,6 +651,7 @@ function Sidebar({
   alertCount,
   className,
   onCloseMobile,
+  sensorOnline,
 }: {
   tab: TabKey;
   setTab: (t: TabKey) => void;
@@ -642,6 +662,7 @@ function Sidebar({
   alertCount: number;
   className?: string;
   onCloseMobile?: () => void;
+  sensorOnline?: boolean;
 }) {
   return (
     <aside
@@ -735,7 +756,7 @@ function Sidebar({
         </div>
         <StatusRow label="Supabase" online />
         <StatusRow label="MQTT Broker" online />
-        <StatusRow label={node.chip} online />
+        <StatusRow label={node.chip} online={!!sensorOnline} />
       </div>
     </aside>
   );
@@ -781,6 +802,7 @@ function Header({
   openPalette: () => void;
   currentUser: { hoten: string; email: string } | null;
   onMenuClick?: () => void;
+  lastSensorTime?: Date | null;
 }) {
   return (
     <header
@@ -810,7 +832,9 @@ function Header({
           </Badge>
         </div>
         <p className={cn("hidden text-xs sm:block", dark ? "text-slate-400" : "text-slate-500")}>
-          Cập nhật lần cuối: <LiveClock />
+          {lastSensorTime
+            ? `Cập nhật lần cuối: ${lastSensorTime.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+            : "Chưa nhận dữ liệu cảm biến"}
         </p>
       </div>
 
@@ -1368,20 +1392,25 @@ function SensorsTab() {
   const totalPages = Math.ceil(filtered.length / pageSize);
 
   const exportCSV = () => {
-    const header = "\uFEFFsep=,\nSTT,Thời gian,Nhiệt độ (°C),Độ ẩm (%),Ánh sáng (lx),Thiết bị gửi\n";
+    const header = "\uFEFFSTT,Date,Time,Temp (C),Humidity (%),Light (lx),Device\n";
     const rows = filtered.map((r) => {
       const d = new Date(r.rawTime);
-      let timeStr = r.time;
+      let dateStr = "";
+      let timeStr = "";
       if (!isNaN(d.getTime())) {
         const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const mo = String(d.getMonth() + 1).padStart(2, '0');
         const day = String(d.getDate()).padStart(2, '0');
         const h = String(d.getHours()).padStart(2, '0');
         const min = String(d.getMinutes()).padStart(2, '0');
         const s = String(d.getSeconds()).padStart(2, '0');
-        timeStr = `${y}-${m}-${day} ${h}:${min}:${s}`;
+        dateStr = `${day}/${mo}/${y}`;
+        timeStr = `${h}:${min}:${s}`;
+      } else {
+        dateStr = r.time;
+        timeStr = "";
       }
-      return `${r.id},${timeStr},${r.temp},${r.humid},${r.light},${r.device}`;
+      return `${r.id},${dateStr},${timeStr},${r.temp},${r.humid},${r.light},${r.device}`;
     }).join("\n");
 
     const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
