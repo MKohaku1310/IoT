@@ -30,22 +30,21 @@ export function ParticleCanvas({ modes }: { modes: ParticleMode[] }) {
 
     const spawn = () => {
       const active = new Set(modesRef.current);
-      // SNOW — denser, larger flakes with drift
+      // SNOW — optimized spawn rate and count
       if (active.has("snow")) {
-        for (let k = 0; k < 3; k++) {
-          if (Math.random() < 0.9)
-            particles.push({
-              x: Math.random() * w,
-              y: -20,
-              vx: (Math.random() - 0.5) * 1.4 * dpr,
-              vy: (0.6 + Math.random() * 1.6) * dpr,
-              r: (4 + Math.random() * 8) * dpr,
-              a: 0.65 + Math.random() * 0.35,
-              kind: "snow",
-              seed: Math.random() * 1000,
-              rot: Math.random() * Math.PI * 2,
-              rotV: (Math.random() - 0.5) * 0.015,
-            });
+        if (Math.random() < 0.25) {
+          particles.push({
+            x: Math.random() * w,
+            y: -20,
+            vx: (Math.random() - 0.5) * 1.0 * dpr,
+            vy: (0.4 + Math.random() * 1.0) * dpr,
+            r: (3 + Math.random() * 5) * dpr,
+            a: 0.6 + Math.random() * 0.4,
+            kind: "snow",
+            seed: Math.random() * 1000,
+            rot: Math.random() * Math.PI * 2,
+            rotV: (Math.random() - 0.5) * 0.015,
+          });
         }
       }
       // WIND — many streaks, faster
@@ -124,53 +123,18 @@ export function ParticleCanvas({ modes }: { modes: ParticleMode[] }) {
         }
         ctx.globalAlpha = Math.min(1, p.a);
         if (p.kind === "snow") {
-          const rot = p.rot ?? 0;
           const r = p.r;
           ctx.save();
           ctx.translate(p.x, p.y);
-          ctx.rotate(rot);
-          // glow halo
-          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.8);
-          g.addColorStop(0, "rgba(186,230,255,0.5)");
-          g.addColorStop(1, "rgba(186,230,255,0)");
+          // Soft circular glow gradient
+          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.8);
+          g.addColorStop(0, "rgba(255,255,255,1)");
+          g.addColorStop(0.2, "rgba(240,248,255,0.9)");
+          g.addColorStop(0.5, "rgba(200,230,255,0.4)");
+          g.addColorStop(1, "rgba(200,230,255,0)");
           ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(0, 0, r * 2.8, 0, Math.PI * 2);
-          ctx.fill();
-          // draw 6-armed snowflake
-          ctx.strokeStyle = "rgba(255,255,255,0.92)";
-          ctx.lineWidth = Math.max(1, r * 0.22);
-          ctx.lineCap = "round";
-          for (let arm = 0; arm < 6; arm++) {
-            ctx.save();
-            ctx.rotate((arm * Math.PI) / 3);
-            // main arm
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(0, -r);
-            ctx.stroke();
-            // two branch pairs at 60% and 85% of arm length
-            const branchAngles = [Math.PI / 5, -Math.PI / 5];
-            const branchStarts = [r * 0.45, r * 0.72];
-            const branchLens = [r * 0.38, r * 0.26];
-            for (let b = 0; b < 2; b++) {
-              for (const ang of branchAngles) {
-                ctx.save();
-                ctx.translate(0, -branchStarts[b]);
-                ctx.rotate(ang);
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                ctx.lineTo(0, -branchLens[b]);
-                ctx.stroke();
-                ctx.restore();
-              }
-            }
-            ctx.restore();
-          }
-          // center dot
-          ctx.fillStyle = "rgba(255,255,255,0.95)";
-          ctx.beginPath();
-          ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
+          ctx.arc(0, 0, r * 1.8, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         } else if (p.kind === "wind") {
