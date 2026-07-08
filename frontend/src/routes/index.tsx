@@ -791,6 +791,7 @@ function Header({
   openPalette,
   currentUser,
   onMenuClick,
+  lastSensorTime,
 }: {
   title: string;
   nodeName: string;
