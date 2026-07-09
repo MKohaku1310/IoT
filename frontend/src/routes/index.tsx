@@ -243,6 +243,7 @@ function Dashboard() {
   // Refs to avoid stale closures inside supabase event callbacks
   const thresholdsRef = useRef(thresholds);
   const currentUserIdRef = useRef(currentUserId);
+  const lastSensorIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     thresholdsRef.current = thresholds;
@@ -255,6 +256,82 @@ function Dashboard() {
   // Live sensor / db realtime sync
   useEffect(() => {
     let active = true;
+
+    const refreshLatestData = async () => {
+      if (!active) return;
+
+      try {
+        const [{ data: sensorRows, error: sensorError }, { data: devData, error: devError }, { data: ruleData, error: ruleError }] = await Promise.all([
+          supabase.from("dulieucambien").select("*").order("thoigian", { ascending: false }).limit(1),
+          supabase.from("den").select("*"),
+          supabase.from("luat").select("*"),
+        ]);
+
+        if (sensorError) {
+          console.error("Lỗi refresh cảm biến:", sensorError);
+          return;
+        }
+
+        if (sensorRows && sensorRows.length > 0) {
+          const latest = sensorRows[0];
+          const latestId = Number(latest.iddl);
+          if (latestId !== lastSensorIdRef.current) {
+            const nextSensors = {
+              temp: Number(latest.nhietdo),
+              humid: Number(latest.doam),
+              light: Number(latest.anhsang),
+            };
+            setSensors((prev) => {
+              if (prev.temp === nextSensors.temp && prev.humid === nextSensors.humid && prev.light === nextSensors.light) {
+                return prev;
+              }
+              return nextSensors;
+            });
+            setSensorHistory((prev) => {
+              const hasSameId = prev.some((item) => Number(item.iddl) === latestId);
+              if (hasSameId) return prev;
+              return [latest, ...prev].slice(0, 24);
+            });
+            setLastSensorTime(new Date(latest.thoigian ?? Date.now()));
+            setSensorOnline(true);
+            lastSensorIdRef.current = latestId;
+          }
+        }
+
+        if (!devError && devData) {
+          setDevices((prev) => {
+            const next = { ...prev };
+            devData.forEach((d) => {
+              const key = d.idden === 1 ? "ac" : d.idden === 2 ? "fan" : "light";
+              next[key] = { ...next[key], on: d.trangthai === 1 };
+            });
+            return next;
+          });
+        }
+
+        if (!ruleError && ruleData) {
+          setDevices((prev) => {
+            const next = { ...prev };
+            ruleData.forEach((r) => {
+              const key = r.idden === 1 ? "ac" : r.idden === 2 ? "fan" : "light";
+              next[key] = { ...next[key], mode: r.automation ? "auto" : "manual" };
+            });
+            return next;
+          });
+
+          setThresholds((prev) => {
+            const next = { ...prev };
+            ruleData.forEach((r) => {
+              const key = r.idden === 1 ? "temp" : r.idden === 2 ? "humid" : "light";
+              next[key] = Number(r.nguong);
+            });
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error("Lỗi khi refresh snapshot dữ liệu:", err);
+      }
+    };
 
     const loadInitial = async () => {
       try {
@@ -375,6 +452,11 @@ function Dashboard() {
     };
 
     loadInitial();
+    void refreshLatestData();
+
+    const pollTimer = window.setInterval(() => {
+      void refreshLatestData();
+    }, 5000);
 
     const deviceChan = supabase
       .channel("db-device-changes")
@@ -397,6 +479,7 @@ function Dashboard() {
         if (status === "CHANNEL_ERROR") {
           console.error("Realtime channel 'den' error");
           toast.error("Mất kết nối Realtime", { description: "Kênh thiết bị bị ngắt. Đang thử kết nối lại..." });
+          void refreshLatestData();
         }
       });
 
@@ -535,6 +618,7 @@ function Dashboard() {
         if (status === "CHANNEL_ERROR") {
           console.error("Realtime channel 'dulieucambien' error");
           toast.error("Lỗi kết nối cảm biến", { description: "Mất kết nối nhận dữ liệu trực tiếp từ ESP32!" });
+          void refreshLatestData();
         }
       });
 
@@ -600,6 +684,7 @@ function Dashboard() {
 
     return () => {
       active = false;
+      window.clearInterval(pollTimer);
       supabase.removeChannel(deviceChan);
       supabase.removeChannel(ruleChan);
       supabase.removeChannel(sensorChan);
