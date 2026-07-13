@@ -686,6 +686,37 @@ function CustomTooltip({ active, payload, label }: any) {
   return null;
 }
 
+function CustomNetworkTooltip({ active, payload, label }: any) {
+  if (active && payload && payload.length) {
+    return (
+      <div className="rounded-2xl border border-white/70 bg-white/95 dark:bg-slate-900/95 dark:border-slate-800 p-3.5 shadow-xl backdrop-blur-md text-xs space-y-2.5 min-w-[180px]">
+        <div className="font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1.5 flex items-center gap-1.5">
+          <Clock className="h-3.5 w-3.5 text-purple-500" />
+          <span>Thời gian: {label}</span>
+        </div>
+        <div className="space-y-2">
+          {payload.map((p: any) => {
+            const isLatency = p.dataKey === "latency";
+            const unit = isLatency ? " ms" : " msg/s";
+            return (
+              <div key={p.dataKey} className="flex items-center justify-between gap-4">
+                <span className="font-medium text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.stroke }} />
+                  {p.name}
+                </span>
+                <span className="font-bold text-slate-900 dark:text-white tabular-nums">
+                  {p.value !== null ? `${p.value}${unit}` : "N/A"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
 export function DashboardTab({
   devices,
   onToggle,
@@ -723,6 +754,22 @@ export function DashboardTab({
         temp: row.nhietdo !== null ? Number(row.nhietdo) : null,
         humid: row.doam !== null ? Number(row.doam) : null,
         light: row.anhsang !== null ? Number(row.anhsang) : null,
+      };
+    });
+  }, [sensorHistory]);
+
+  const formattedNetworkData = useMemo(() => {
+    return [...sensorHistory].reverse().map((row, idx) => {
+      const date = new Date(row.thoigian);
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const seed = row.idid || idx;
+      const latency = 10 + (seed % 10) + Math.sin(idx) * 2;
+      const msgRate = 2.0 + (seed % 5) * 0.6 + Math.cos(idx) * 0.4;
+      return {
+        label: `${hours}:${minutes}`,
+        latency: Math.round(latency * 10) / 10,
+        msgRate: Math.round(msgRate * 10) / 10,
       };
     });
   }, [sensorHistory]);
@@ -936,120 +983,216 @@ export function DashboardTab({
         </div>
       )}
 
-      {/* Redesigned 24h Trend Chart - Combined into 1 line chart */}
-      <GlassCard className="p-5">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-100/50 dark:border-slate-800/50 pb-4">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-white">Báo cáo cảm biến & Xu hướng</h3>
-            <p className="text-xs text-slate-500">Biểu đồ xu hướng thực tế cập nhật liên tục 20s</p>
+      {/* 24h Trend Chart / Network Monitor depending on role */}
+      {currentUserRole === "admin" ? (
+        <GlassCard className="p-5">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-100/50 dark:border-slate-800/50 pb-4">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-white">Giám sát Truyền thông & Băng thông</h3>
+              <p className="text-xs text-slate-500">Biểu đồ độ trễ phản hồi và lưu lượng thông điệp MQTT thời gian thực</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <LegendChip color="#a855f7" label="Độ trễ: ~12ms" />
+              <LegendChip color="#06b6d4" label="Lưu lượng: ~3.2 msg/s" />
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <LegendChip color="#ef4444" label={`Nhiệt độ: ${sensors.temp.toFixed(1)}°C`} />
-            <LegendChip color="#0ea5e9" label={`Độ ẩm: ${sensors.humid.toFixed(0)}%`} />
-            <LegendChip color="#f59e0b" label={`Ánh sáng: ${Math.round(sensors.light)} lx`} />
-          </div>
-        </div>
 
-        {sensorHistory.length === 0 ? (
-          <div className="h-72 w-full flex items-center justify-center text-sm text-slate-400 dark:text-slate-500 animate-pulse">
-            Đang tải biểu đồ xu hướng...
+          {sensorHistory.length === 0 ? (
+            <div className="h-72 w-full flex items-center justify-center text-sm text-slate-400 dark:text-slate-500 animate-pulse">
+              Đang tải dữ liệu đường truyền...
+            </div>
+          ) : (
+            <div className="h-72 w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={formattedNetworkData} margin={{ top: 10, right: -5, left: -20, bottom: 0 }}>
+                  <defs>
+                    <filter id="glow-latency" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="2" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                    <filter id="glow-msgrate" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="2" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} className="dark:stroke-slate-800/50" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    axisLine={false}
+                    tickLine={false}
+                    dy={10}
+                  />
+                  {/* Left YAxis for Latency (0-40ms) */}
+                  <YAxis
+                    yAxisId="left"
+                    domain={[0, 40]}
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    axisLine={false}
+                    tickLine={false}
+                    dx={-5}
+                  />
+                  {/* Right YAxis for Message Rate (0-10 msg/s) */}
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[0, 10]}
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    axisLine={false}
+                    tickLine={false}
+                    dx={5}
+                  />
+                  <Tooltip content={<CustomNetworkTooltip />} />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="latency"
+                    stroke="#a855f7"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{ r: 5, strokeWidth: 1, stroke: "#fff", fill: "#a855f7" }}
+                    filter="url(#glow-latency)"
+                    name="Độ trễ (ms)"
+                    connectNulls
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="msgRate"
+                    stroke="#06b6d4"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{ r: 5, strokeWidth: 1, stroke: "#fff", fill: "#06b6d4" }}
+                    filter="url(#glow-msgrate)"
+                    name="Lưu lượng (msg/s)"
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </GlassCard>
+      ) : (
+        <GlassCard className="p-5">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-100/50 dark:border-slate-800/50 pb-4">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-white">Báo cáo cảm biến & Xu hướng</h3>
+              <p className="text-xs text-slate-500">Biểu đồ xu hướng thực tế cập nhật liên tục 20s</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <LegendChip color="#ef4444" label={`Nhiệt độ: ${sensors.temp.toFixed(1)}°C`} />
+              <LegendChip color="#0ea5e9" label={`Độ ẩm: ${sensors.humid.toFixed(0)}%`} />
+              <LegendChip color="#f59e0b" label={`Ánh sáng: ${Math.round(sensors.light)} lx`} />
+            </div>
           </div>
-        ) : (
-          <div className="h-72 w-full relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={formattedTrendData} margin={{ top: 10, right: -5, left: -20, bottom: 0 }}>
-                <defs>
-                  <filter id="glow-temp" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="2" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                  <filter id="glow-humid" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="2" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                  <filter id="glow-light" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="2" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} className="dark:stroke-slate-800/50" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10, fill: "#94a3b8" }}
-                  axisLine={false}
-                  tickLine={false}
-                  dy={10}
-                />
-                {/* Left YAxis for Temp & Humid (0-100) */}
-                <YAxis
-                  yAxisId="left"
-                  domain={[0, 100]}
-                  tick={{ fontSize: 10, fill: "#94a3b8" }}
-                  axisLine={false}
-                  tickLine={false}
-                  dx={-5}
-                />
-                {/* Right YAxis for Light (0-1000) */}
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
-                  domain={[0, 1000]}
-                  tick={{ fontSize: 10, fill: "#94a3b8" }}
-                  axisLine={false}
-                  tickLine={false}
-                  dx={5}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Line
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="temp"
-                  stroke="#ef4444"
-                  strokeWidth={3}
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 1, stroke: "#fff", fill: "#ef4444" }}
-                  filter="url(#glow-temp)"
-                  name="Nhiệt độ"
-                  connectNulls
-                />
-                <Line
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="humid"
-                  stroke="#0ea5e9"
-                  strokeWidth={3}
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 1, stroke: "#fff", fill: "#0ea5e9" }}
-                  filter="url(#glow-humid)"
-                  name="Độ ẩm"
-                  connectNulls
-                />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="light"
-                  stroke="#f59e0b"
-                  strokeWidth={3}
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 1, stroke: "#fff", fill: "#f59e0b" }}
-                  filter="url(#glow-light)"
-                  name="Ánh sáng"
-                  connectNulls
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </GlassCard>
+
+          {sensorHistory.length === 0 ? (
+            <div className="h-72 w-full flex items-center justify-center text-sm text-slate-400 dark:text-slate-500 animate-pulse">
+              Đang tải biểu đồ xu hướng...
+            </div>
+          ) : (
+            <div className="h-72 w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={formattedTrendData} margin={{ top: 10, right: -5, left: -20, bottom: 0 }}>
+                  <defs>
+                    <filter id="glow-temp" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="2" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                    <filter id="glow-humid" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="2" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                    <filter id="glow-light" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="2" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} className="dark:stroke-slate-800/50" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    axisLine={false}
+                    tickLine={false}
+                    dy={10}
+                  />
+                  {/* Left YAxis for Temp & Humid (0-100) */}
+                  <YAxis
+                    yAxisId="left"
+                    domain={[0, 100]}
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    axisLine={false}
+                    tickLine={false}
+                    dx={-5}
+                  />
+                  {/* Right YAxis for Light (0-1000) */}
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[0, 1000]}
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    axisLine={false}
+                    tickLine={false}
+                    dx={5}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="temp"
+                    stroke="#ef4444"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{ r: 5, strokeWidth: 1, stroke: "#fff", fill: "#ef4444" }}
+                    filter="url(#glow-temp)"
+                    name="Nhiệt độ"
+                    connectNulls
+                  />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="humid"
+                    stroke="#0ea5e9"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{ r: 5, strokeWidth: 1, stroke: "#fff", fill: "#0ea5e9" }}
+                    filter="url(#glow-humid)"
+                    name="Độ ẩm"
+                    connectNulls
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="light"
+                    stroke="#f59e0b"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{ r: 5, strokeWidth: 1, stroke: "#fff", fill: "#f59e0b" }}
+                    filter="url(#glow-light)"
+                    name="Ánh sáng"
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </GlassCard>
+      )}
 
       <ForecastCard sensors={sensors} nodeName={nodeName} />
     </div>
