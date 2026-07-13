@@ -46,3 +46,6 @@ uml_diagrams.md
 *.njsproj
 *.sln
 *.sw?
+.vercel/
+**/ .vercel/
+scratch/

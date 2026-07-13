@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   User,
@@ -9,18 +9,17 @@ import {
   Activity,
   Bell,
   Cpu,
-  KeyRound,
-  Camera,
   CheckCircle2,
   FileText,
   LogOut,
+  Settings,
+  Phone,
+  Github,
+  ExternalLink,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -54,18 +53,70 @@ function GlassCard({ className, children }: { className?: string; children: Reac
 }
 
 function ProfilePage() {
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [pushAlerts, setPushAlerts] = useState(true);
-  const [criticalOnly, setCriticalOnly] = useState(false);
-  const [threshold, setThreshold] = useState(30);
-
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
+
+  const [lastLivingTime, setLastLivingTime] = useState<Date | null>(null);
+  const [lastBedroomTime, setLastBedroomTime] = useState<Date | null>(null);
+  const [lastKitchenTime, setLastKitchenTime] = useState<Date | null>(null);
+
+  const [nowTime, setNowTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowTime(Date.now());
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const livingOnline = lastLivingTime ? (nowTime - lastLivingTime.getTime() < 30_000) : false;
+  const bedroomOnline = lastBedroomTime ? (nowTime - lastBedroomTime.getTime() < 30_000) : false;
+  const kitchenOnline = lastKitchenTime ? (nowTime - lastKitchenTime.getTime() < 30_000) : false;
+
+  useEffect(() => {
+    let active = true;
+    const fetchLatestDeviceStatus = async () => {
+      try {
+        const { data: sensorRows, error } = await supabase
+          .from("dulieucambien")
+          .select("*")
+          .order("thoigian", { ascending: false })
+          .limit(30);
+
+        if (!active) return;
+        if (error) {
+          console.error("Lỗi khi tải dữ liệu cảm biến cho trạng thái thiết bị:", error);
+          return;
+        }
+
+        if (sensorRows && sensorRows.length > 0) {
+          const livingRecord = sensorRows.find(r => r.cambien === "ESP32-S3-Node-01" || r.cambien === "ESP32" || !r.cambien);
+          const bedroomRecord = sensorRows.find(r => r.cambien === "ESP32-S3-Node-02");
+          const kitchenRecord = sensorRows.find(r => r.cambien === "ESP32-C3-Kitchen");
+
+          if (livingRecord) setLastLivingTime(new Date(livingRecord.thoigian));
+          if (bedroomRecord) setLastBedroomTime(new Date(bedroomRecord.thoigian));
+          if (kitchenRecord) setLastKitchenTime(new Date(kitchenRecord.thoigian));
+        }
+      } catch (err) {
+        console.error("Lỗi hệ thống khi tải trạng thái thiết bị:", err);
+      }
+    };
+
+    fetchLatestDeviceStatus();
+    const interval = setInterval(fetchLatestDeviceStatus, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const [user, setUser] = useState<any>(null);
+  const isFetchingRef = useRef(false);
   const [profile, setProfile] = useState<{
     idnguoidung: number;
+    auth_uid?: string;
     hoten: string;
     email: string;
     sodienthoai: string;
@@ -77,6 +128,7 @@ function ProfilePage() {
     thoigian: string;
   }>({
     idnguoidung: 1,
+    auth_uid: "",
     hoten: "",
     email: "",
     sodienthoai: "",
@@ -121,12 +173,15 @@ function ProfilePage() {
   };
 
   const loadOrCreateProfile = async (authUser: any) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     setLoading(true);
     try {
+      // Truy vấn khớp auth_uid
       const { data, error } = await supabase
         .from("nguoidung")
         .select("*")
-        .eq("email", authUser.email)
+        .eq("auth_uid", authUser.id)
         .maybeSingle();
 
       if (error) throw error;
@@ -134,6 +189,7 @@ function ProfilePage() {
       if (data) {
         setProfile({
           idnguoidung: data.idnguoidung,
+          auth_uid: data.auth_uid,
           hoten: data.hoten || "",
           email: data.email || "",
           sodienthoai: data.sodienthoai || "",
@@ -145,13 +201,14 @@ function ProfilePage() {
           thoigian: data.thoigian || new Date().toISOString()
         });
       } else {
-        // Để DB tự generate ID (serial/sequence), không truyền idnguoidung thủ công
+        // Tự khởi tạo hồ sơ nếu chưa có trong DB
         const displayName = authUser.user_metadata?.full_name ||
           authUser.user_metadata?.name ||
           authUser.email?.split('@')[0] ||
           "Người dùng";
         
         const newProfileData = {
+          auth_uid: authUser.id,
           hoten: displayName,
           email: authUser.email,
           sodienthoai: "",
@@ -164,26 +221,23 @@ function ProfilePage() {
 
         const { data: insertedData, error: insertError } = await supabase
           .from("nguoidung")
-          .insert([newProfileData])
+          .upsert([newProfileData], { onConflict: "auth_uid" })
           .select()
           .single();
 
         if (insertError) {
           console.warn("Không thể tạo hồ sơ trong database:", insertError);
-          // Vẫn set profile local để user có thể dùng app trong phiên này
           setProfile({
             idnguoidung: 0,
             ...newProfileData,
             ngaysinh: "",
             thoigian: new Date().toISOString()
           });
-          toast.warning(
-            `Không thể lưu hồ sơ: ${insertError.message}. Nếu do RLS, vui lòng kiểm tra policy; nếu do Primary Key, vui lòng bật tự động tăng ID (Serial).`,
-            { duration: 8000 }
-          );
+          toast.warning(`Không thể lưu hồ sơ lên DB: ${insertError.message}`);
         } else if (insertedData) {
           setProfile({
             idnguoidung: insertedData.idnguoidung,
+            auth_uid: insertedData.auth_uid,
             hoten: insertedData.hoten || "",
             email: insertedData.email || "",
             sodienthoai: insertedData.sodienthoai || "",
@@ -200,433 +254,394 @@ function ProfilePage() {
     } catch (err: any) {
       console.error("Lỗi khi tải/tạo hồ sơ:", err);
       toast.error("Không thể tải thông tin hồ sơ: " + err.message);
+    } finally {
+      isFetchingRef.current = false;
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
+    let active = true;
     const getSessionUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!active) return;
       if (session?.user) {
         setUser(session.user);
         await loadOrCreateProfile(session.user);
       } else {
-        await loadProfileById(1);
+        // Tự động chuyển hướng về trang login nếu chưa đăng nhập
+        navigate({ to: "/login" });
       }
     };
     
     getSessionUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!active) return;
       if (session?.user) {
         setUser(session.user);
         await loadOrCreateProfile(session.user);
       } else {
         setUser(null);
-        await loadProfileById(1);
+        // Tự động điều hướng về login khi mất phiên hoặc đăng xuất
+        navigate({ to: "/login" });
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
 
-  const handleSaveProfile = async () => {
-    setSaving(true);
-    try {
-      const { data, error } = await supabase
-        .from("nguoidung")
-        .update({
-          hoten: profile.hoten,
-          email: profile.email,
-          sodienthoai: profile.sodienthoai,
-          github: profile.github,
-          figma: profile.figma,
-          ngaysinh: profile.ngaysinh || null,
-          anhdaidien: profile.anhdaidien,
-          linkpdf: profile.linkpdf
-        })
-        .eq("idnguoidung", profile.idnguoidung)
-        .select();
+  const [deviceOpsCount, setDeviceOpsCount] = useState<number | string>("...");
+  const [resolvedAlertsCount, setResolvedAlertsCount] = useState<number | string>("...");
+  const [activeNodesCount, setActiveNodesCount] = useState<number | string>("...");
+  const [uptimeDays, setUptimeDays] = useState<string>("...");
 
-      if (error) throw error;
+  useEffect(() => {
+    let active = true;
+    async function loadStats() {
+      try {
+        // 1. Thao tác thiết bị
+        const { count: totalLogs } = await supabase
+          .from("nhatkyhoatdong")
+          .select("*", { count: "exact", head: true });
 
-      if (!data || data.length === 0) {
-        throw new Error("Không có hàng nào được cập nhật. Vui lòng tắt Row Level Security (RLS) cho bảng 'nguoidung' trên Supabase Dashboard!");
+        // Count warning logs
+        const { count: warningsCount } = await supabase
+          .from("nhatkyhoatdong")
+          .select("*", { count: "exact", head: true })
+          .or("hanhdong.ilike.%vượt ngưỡng%,hanhdong.ilike.%Lỗi%,hanhdong.ilike.%Cảnh báo%,hanhdong.ilike.%Mất kết nối%");
+
+        if (!active) return;
+
+        const total = totalLogs || 0;
+        const warns = warningsCount || 0;
+
+        setDeviceOpsCount((total - warns).toLocaleString("vi-VN"));
+        setResolvedAlertsCount(warns.toLocaleString("vi-VN"));
+
+        // 2. Node đang quản lý
+        const { count: denCount } = await supabase
+          .from("den")
+          .select("*", { count: "exact", head: true });
+        
+        if (!active) return;
+        setActiveNodesCount(denCount || 3);
+
+        // 3. Uptime hoạt động
+        let earliestDate = profile.thoigian ? new Date(profile.thoigian) : new Date();
+        const { data: firstSensor } = await supabase
+          .from("dulieucambien")
+          .select("thoigian")
+          .order("thoigian", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (firstSensor && active) {
+          const sensorDate = new Date(firstSensor.thoigian);
+          if (sensorDate < earliestDate) {
+            earliestDate = sensorDate;
+          }
+        }
+        
+        if (!active) return;
+        const diffTime = Math.abs(new Date().getTime() - earliestDate.getTime());
+        const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+        setUptimeDays(`${diffDays} ngày`);
+      } catch (err) {
+        console.error("Lỗi khi tải thông số thống kê:", err);
       }
-      
-      await supabase.from("nhatkyhoatdong").insert([{
-        idnguoidung: profile.idnguoidung,
-        hanhdong: `Cấu hình: Cập nhật thông tin cá nhân của người dùng (${profile.hoten})`
-      }]);
-      
-      toast.success("Cập nhật thông tin hồ sơ thành công!");
-      setIsEditing(false);
-    } catch (err: any) {
-      toast.error("Lỗi khi cập nhật hồ sơ: " + err.message);
     }
-    setSaving(false);
-  };
+
+    loadStats();
+    return () => {
+      active = false;
+    };
+  }, [profile.thoigian]);
 
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
       toast.success("Đã đăng xuất thành công!");
-      window.location.href = "/";
+      navigate({ to: "/login" });
     } catch (err: any) {
       toast.error("Lỗi khi đăng xuất: " + err.message);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f6f7fb]">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent mx-auto"></div>
+          <p className="mt-2 text-sm text-slate-500">Đang tải hồ sơ...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_-10%_-10%,#dbe7ff_0%,transparent_60%),radial-gradient(900px_500px_at_110%_10%,#ffe4f0_0%,transparent_55%),linear-gradient(180deg,#f6f7fb_0%,#eef1f8_100%)] p-6 lg:p-10 text-slate-800">
+    <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_-10%_-10%,#dbe7ff_0%,transparent_60%),radial-gradient(900px_500px_at_110%_10%,#ffe4f0_0%,transparent_55%),linear-gradient(180deg,#f6f7fb_0%,#eef1f8_100%)] p-4 sm:p-6 lg:p-10 text-slate-800">
       <div className="mx-auto max-w-6xl space-y-6">
+        
+        {/* Top Navbar */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Link
             to="/"
-            className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
+            className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm backdrop-blur transition hover:bg-white hover:scale-105 active:scale-95 duration-200"
           >
             <ArrowLeft className="h-4 w-4" /> Về Bảng điều khiển
           </Link>
-
-          {!user && (
-            <div className="flex-1 min-w-[280px] flex items-center justify-between gap-4 rounded-full border border-amber-200 bg-amber-50/80 px-4 py-2 text-xs text-amber-800 shadow-sm backdrop-blur-lg">
-              <span>
-                <span className="font-bold">Chế độ khách:</span> Bạn đang xem tài khoản mẫu. Đăng nhập để chỉnh sửa thông tin!
-              </span>
-              <Link to="/login" className="font-bold text-indigo-600 hover:underline">Đăng nhập</Link>
-            </div>
-          )}
-          {user && (
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-            >
-              <LogOut className="h-4 w-4 mr-2" /> Đăng xuất
-            </Button>
-          )}
-        </div>
-
-        {/* Header card */}
-        <GlassCard>
-          <div className="flex flex-col items-start gap-6 md:flex-row md:items-center">
-            <div className="relative">
-              <div className="overflow-hidden rounded-3xl h-24 w-24 shadow-xl shadow-indigo-500/40">
-                <img src={profile.anhdaidien} alt="Avatar" className="h-full w-full object-cover" />
-              </div>
-              <button 
-                onClick={() => setIsEditing(true)}
-                className="absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full border-2 border-white bg-slate-900 text-white shadow-md transition hover:scale-110"
+          
+          <div className="flex items-center gap-3">
+            {user && (
+              <Button
+                asChild
+                className="bg-slate-900 text-white shadow-md hover:bg-slate-800 hover:scale-105 active:scale-95 duration-200 cursor-pointer rounded-full px-5"
               >
-                <Camera className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="min-w-0 flex-1">
-              {isEditing ? (
-                <div className="grid gap-3 sm:grid-cols-2 max-w-xl">
-                  <div className="space-y-1">
-                    <Label htmlFor="fullname" className="text-xs font-semibold text-slate-500">Họ và tên</Label>
-                    <Input
-                      id="fullname"
-                      value={profile.hoten}
-                      onChange={(e) => setProfile(p => ({ ...p, hoten: e.target.value }))}
-                      className="bg-white/80 h-9 text-slate-900"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="email" className="text-xs font-semibold text-slate-500">Email</Label>
-                    <Input
-                      id="email"
-                      value={profile.email}
-                      onChange={(e) => setProfile(p => ({ ...p, email: e.target.value }))}
-                      className="bg-white/80 h-9 text-slate-900"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="phone" className="text-xs font-semibold text-slate-500">Số điện thoại</Label>
-                    <Input
-                      id="phone"
-                      value={profile.sodienthoai}
-                      onChange={(e) => setProfile(p => ({ ...p, sodienthoai: e.target.value }))}
-                      className="bg-white/80 h-9 text-slate-900"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="dob" className="text-xs font-semibold text-slate-500">Ngày sinh</Label>
-                    <Input
-                      id="dob"
-                      type="date"
-                      value={profile.ngaysinh}
-                      onChange={(e) => setProfile(p => ({ ...p, ngaysinh: e.target.value }))}
-                      className="bg-white/80 h-9 text-slate-900"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="github" className="text-xs font-semibold text-slate-500">Github</Label>
-                    <Input
-                      id="github"
-                      value={profile.github}
-                      onChange={(e) => setProfile(p => ({ ...p, github: e.target.value }))}
-                      className="bg-white/80 h-9 text-slate-900"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="figma" className="text-xs font-semibold text-slate-500">Figma</Label>
-                    <Input
-                      id="figma"
-                      value={profile.figma}
-                      onChange={(e) => setProfile(p => ({ ...p, figma: e.target.value }))}
-                      className="bg-white/80 h-9 text-slate-900"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="avatar" className="text-xs font-semibold text-slate-500">Ảnh đại diện URL</Label>
-                    <Input
-                      id="avatar"
-                      value={profile.anhdaidien}
-                      onChange={(e) => setProfile(p => ({ ...p, anhdaidien: e.target.value }))}
-                      className="bg-white/80 h-9 text-slate-900"
-                    />
-                  </div>
-                  <div className="space-y-1 sm:col-span-2">
-                    <Label htmlFor="linkpdf" className="text-xs font-semibold text-slate-500">Đường dẫn PDF tài liệu</Label>
-                    <Input
-                      id="linkpdf"
-                      value={profile.linkpdf}
-                      onChange={(e) => setProfile(p => ({ ...p, linkpdf: e.target.value }))}
-                      className="bg-white/80 h-9 text-slate-900"
-                      placeholder="https://example.com/tai-lieu.pdf"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <h1 className="text-2xl font-bold text-slate-900">{profile.hoten || "Chưa thiết lập tên"}</h1>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <Badge className="rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-100">
-                      <Shield className="mr-1 h-3 w-3" /> Quản trị viên
-                    </Badge>
-                    <span className="inline-flex items-center gap-1.5 text-sm text-slate-600">
-                      <Mail className="h-3.5 w-3.5" /> {profile.email}
-                    </span>
-                    {profile.sodienthoai && (
-                      <span className="inline-flex items-center gap-1.5 text-sm text-slate-600">
-                        SĐT: {profile.sodienthoai}
-                      </span>
-                    )}
-                    <span className="inline-flex items-center gap-1.5 text-sm text-slate-600">
-                      <Calendar className="h-3.5 w-3.5" /> Tham gia: {new Date(profile.thoigian).toLocaleDateString("vi-VN")}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
-                    {profile.github && (
-                      <span>
-                        Github: <a href={`https://github.com/${profile.github}`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">{profile.github}</a>
-                      </span>
-                    )}
-                    {profile.figma && (
-                      <span>
-                        Figma: <span className="font-medium text-slate-700">{profile.figma}</span>
-                      </span>
-                    )}
-                    {profile.ngaysinh && (
-                      <span>
-                        Sinh nhật: <span className="font-medium text-slate-700">{new Date(profile.ngaysinh).toLocaleDateString("vi-VN")}</span>
-                      </span>
-                    )}
-                    {profile.linkpdf && (
-                      <span>
-                        Tài liệu: <a href={profile.linkpdf} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:underline"><FileText className="h-3 w-3" /> Xem PDF</a>
-                      </span>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="flex gap-2">
-              {isEditing ? (
-                <>
-                  <Button 
-                    disabled={saving}
-                    onClick={handleSaveProfile}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20"
-                  >
-                    {saving ? "Đang lưu..." : "Lưu"}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    disabled={saving}
-                    onClick={() => setIsEditing(false)}
-                  >
-                    Hủy
-                  </Button>
-                </>
-              ) : (
-                <Button 
-                  onClick={() => setIsEditing(true)}
-                  className="bg-gradient-to-r from-indigo-500 to-sky-500 text-white shadow-md shadow-indigo-500/30 hover:opacity-90"
-                >
-                  Chỉnh sửa
-                </Button>
-              )}
-            </div>
-          </div>
-        </GlassCard>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {[
-            { label: "Thao tác thiết bị", value: "1,284", icon: Activity, color: "from-indigo-500 to-sky-400" },
-            { label: "Cảnh báo đã xử lý", value: "42", icon: Bell, color: "from-rose-500 to-orange-400" },
-            { label: "Node đang quản lý", value: "3", icon: Cpu, color: "from-emerald-500 to-teal-400" },
-            { label: "Uptime hoạt động", value: "27 ngày", icon: CheckCircle2, color: "from-amber-400 to-yellow-300" },
-          ].map((s) => {
-            const Icon = s.icon;
-            return (
-              <GlassCard key={s.label} className="p-4">
-                <div className={cn("grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br text-white shadow-md", s.color)}>
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div className="mt-3 text-2xl font-bold text-slate-900">{s.value}</div>
-                <div className="text-xs text-slate-500">{s.label}</div>
-              </GlassCard>
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Managed devices */}
-          <GlassCard>
-            <h3 className="text-base font-semibold text-slate-900">Node/Thiết bị đang quản lý</h3>
-            <p className="text-xs text-slate-500">Danh sách node ESP32 gắn với tài khoản</p>
-            <ul className="mt-4 space-y-2">
-              {[
-                { name: "ESP32-S3 · Phòng khách", status: "Online", devices: "AC, Fan, Light" },
-                { name: "ESP32-S3 · Phòng ngủ", status: "Online", devices: "AC, Light" },
-                { name: "ESP32-C3 · Nhà bếp", status: "Offline", devices: "Fan, Sensor" },
-              ].map((d) => (
-                <li key={d.name} className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/60 p-4">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-slate-900">{d.name}</div>
-                    <div className="text-xs text-slate-500">{d.devices}</div>
-                  </div>
-                  <Badge
-                    className={cn(
-                      "rounded-full",
-                      d.status === "Online"
-                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                        : "bg-rose-100 text-rose-700 hover:bg-rose-100",
-                    )}
-                  >
-                    ● {d.status}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          </GlassCard>
-
-          {/* Change password */}
-          <GlassCard>
-            <div className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-slate-500" />
-              <h3 className="text-base font-semibold text-slate-900">Đổi mật khẩu</h3>
-            </div>
-            <form
-              className="mt-4 space-y-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                toast.success("Đã đổi mật khẩu thành công");
-              }}
-            >
-              <div className="space-y-1.5">
-                <Label htmlFor="old">Mật khẩu hiện tại</Label>
-                <Input id="old" type="password" className="bg-white/80" placeholder="••••••••" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="new">Mật khẩu mới</Label>
-                <Input id="new" type="password" className="bg-white/80" placeholder="Ít nhất 8 ký tự" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="confirm">Xác nhận mật khẩu</Label>
-                <Input id="confirm" type="password" className="bg-white/80" />
-              </div>
-              <Button type="submit" className="w-full bg-slate-900 text-white hover:bg-slate-800">
-                Cập nhật mật khẩu
+                <Link to="/settings">
+                  <Settings className="mr-2 h-4 w-4" /> Chỉnh sửa hồ sơ
+                </Link>
               </Button>
-            </form>
-          </GlassCard>
+            )}
+            {user && (
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-full px-5 hover:scale-105 active:scale-95 duration-200 cursor-pointer"
+              >
+                <LogOut className="h-4 w-4 mr-2" /> Đăng xuất
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Notification prefs */}
-        <GlassCard>
-          <div className="flex items-center gap-2">
-            <Bell className="h-4 w-4 text-slate-500" />
-            <h3 className="text-base font-semibold text-slate-900">Cài đặt thông báo cá nhân</h3>
-          </div>
-          <div className="mt-4 space-y-4">
-            <ToggleRow
-              label="Nhận cảnh báo qua email"
-              hint="Gửi tới admin@smarthome.io khi thiết bị vượt ngưỡng"
-              value={emailAlerts}
-              onChange={setEmailAlerts}
-            />
-            <ToggleRow
-              label="Thông báo đẩy trong ứng dụng"
-              hint="Toast góc phải màn hình khi có sự kiện mới"
-              value={pushAlerts}
-              onChange={setPushAlerts}
-            />
-            <ToggleRow
-              label="Chỉ báo cảnh báo nghiêm trọng"
-              hint="Bỏ qua cảnh báo mức thấp/thông tin"
-              value={criticalOnly}
-              onChange={setCriticalOnly}
-            />
-            <div className="rounded-2xl border border-white/70 bg-white/60 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-slate-900">Ngưỡng nhiệt độ báo riêng</div>
-                  <div className="text-xs text-slate-500">Gửi email khi nhiệt độ vượt giá trị này</div>
+        {/* Main Grid Layout */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 animate-fade-in">
+          
+          {/* LEFT COLUMN: Showcase Card (lg:col-span-5) */}
+          <div className="lg:col-span-5 space-y-6">
+            <GlassCard className="overflow-hidden p-0 relative border-indigo-100/50 shadow-lg">
+              {/* Card Banner Background */}
+              <div className="h-32 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-90 relative">
+                {/* Abstract pattern shapes */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.15),transparent)]" />
+              </div>
+              
+              <div className="px-6 pb-8 relative flex flex-col items-center">
+                {/* Avatar with Ring */}
+                <div className="relative -mt-16 mb-4">
+                  <div className="h-32 w-32 rounded-full p-1.5 bg-white shadow-xl">
+                    <div className="overflow-hidden rounded-full h-full w-full border-2 border-indigo-500/20 bg-slate-100">
+                      <img
+                        src={profile.anhdaidien || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop"}
+                        alt="Avatar"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  </div>
+                  {/* Status Indicator */}
+                  <span className="absolute bottom-1 right-2 flex h-5 w-5 rounded-full border-2 border-white bg-emerald-500 shadow-md">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  </span>
                 </div>
-                <div className="text-lg font-semibold text-slate-900 tabular-nums">
-                  {threshold}°C
+
+                {/* Name and Role */}
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight text-center">{profile.hoten || "Người dùng"}</h2>
+                <Badge className="mt-2 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 px-3 py-1 font-semibold flex items-center gap-1 shadow-sm">
+                  <Shield className="h-3.5 w-3.5" /> Quản trị viên
+                </Badge>
+
+                {/* Quick Info Grid */}
+                <div className="mt-8 w-full space-y-4 border-t border-slate-100 pt-6">
+                  <div className="flex items-center gap-3 text-slate-700 hover:bg-slate-50/50 p-2.5 rounded-xl transition duration-150">
+                    <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                      <Mail className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Email</p>
+                      <p className="text-sm font-semibold truncate">{profile.email || "Chưa cập nhật"}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-slate-700 hover:bg-slate-50/50 p-2.5 rounded-xl transition duration-150">
+                    <div className="h-9 w-9 rounded-xl bg-sky-50 flex items-center justify-center text-sky-600">
+                      <Phone className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Số điện thoại</p>
+                      <p className="text-sm font-semibold truncate">{profile.sodienthoai || "Chưa cấu hình"}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-slate-700 hover:bg-slate-50/50 p-2.5 rounded-xl transition duration-150">
+                    <div className="h-9 w-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                      <Calendar className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Ngày sinh</p>
+                      <p className="text-sm font-semibold truncate">
+                        {profile.ngaysinh ? new Date(profile.ngaysinh).toLocaleDateString("vi-VN", { day: 'numeric', month: 'long', year: 'numeric' }) : "Chưa cấu hình"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-slate-700 hover:bg-slate-50/50 p-2.5 rounded-xl transition duration-150">
+                    <div className="h-9 w-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                      <Calendar className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Ngày gia nhập</p>
+                      <p className="text-sm font-semibold truncate">
+                        {new Date(profile.thoigian).toLocaleDateString("vi-VN", { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Social Links & PDF Portfolio */}
+                <div className="mt-6 w-full flex flex-col gap-2 border-t border-slate-100 pt-6">
+                  {profile.github && (
+                    <a
+                      href={`https://github.com/${profile.github}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white/50 px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-indigo-50/50 hover:border-indigo-200"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Github className="h-4 w-4 text-slate-900" />
+                        <span>GitHub: <span className="text-indigo-600 font-bold">@{profile.github}</span></span>
+                      </span>
+                      <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
+                    </a>
+                  )}
+
+                  {profile.figma && (
+                    <div className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white/50 px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm">
+                      <span className="flex items-center gap-2">
+                        <svg className="h-4 w-4 text-pink-500 animate-pulse" viewBox="0 0 38 57" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M19 0C8.5 0 0 8.5 0 19C0 24.3 2.2 29 5.8 32.4C2.2 35.8 0 40.5 0 45.8C0 56.3 8.5 64.8 19 64.8C24.3 64.8 29 62.6 32.4 59C36 62.6 40.7 64.8 46 64.8C56.5 64.8 65 56.3 65 45.8C65 40.5 62.8 35.8 59.2 32.4C62.8 29 65 24.3 65 19C65 8.5 56.5 0 46 0H19Z" fill="url(#figma_grad)" />
+                          <defs>
+                            <linearGradient id="figma_grad" x1="0" y1="0" x2="65" y2="64.8" gradientUnits="userSpaceOnUse">
+                              <stop stopColor="#F24E1E" />
+                              <stop offset="0.25" stopColor="#FF7262" />
+                              <stop offset="0.5" stopColor="#A259FF" />
+                              <stop offset="0.75" stopColor="#1ABCFE" />
+                              <stop offset="1" stopColor="#0ACF83" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                        <span>Figma: <span className="text-slate-900 font-bold">{profile.figma}</span></span>
+                      </span>
+                    </div>
+                  )}
+
+                  {profile.linkpdf && (
+                    <a
+                      href={profile.linkpdf}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-sky-500 py-3 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition hover:opacity-90 hover:scale-[1.02] active:scale-[0.98] duration-150 cursor-pointer"
+                    >
+                      <FileText className="h-4.5 w-4.5" /> Xem Tài liệu PDF (CV)
+                    </a>
+                  )}
                 </div>
               </div>
-              <Slider value={[threshold]} min={20} max={40} step={1} onValueChange={(v) => setThreshold(v[0])} className="mt-4" />
-            </div>
+            </GlassCard>
           </div>
-          <div className="mt-6 flex justify-end">
-            <Button
-              onClick={() => toast.success("Đã lưu cài đặt thông báo")}
-              className="bg-gradient-to-r from-indigo-500 to-sky-500 text-white shadow-md shadow-indigo-500/30 hover:opacity-90"
-            >
-              Lưu cài đặt
-            </Button>
-          </div>
-        </GlassCard>
-      </div>
-    </div>
-  );
-}
 
-function ToggleRow({
-  label,
-  hint,
-  value,
-  onChange,
-}: {
-  label: string;
-  hint: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/60 p-4">
-      <div className="min-w-0 pr-3">
-        <div className="text-sm font-medium text-slate-900">{label}</div>
-        <div className="text-xs text-slate-500">{hint}</div>
+          {/* RIGHT COLUMN: Statistics and Connected Devices (lg:col-span-7) */}
+          <div className="lg:col-span-7 space-y-6">
+            
+            {/* Stats Dashboard */}
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { label: "Thao tác thiết bị", value: deviceOpsCount, icon: Activity, color: "from-indigo-500 to-sky-400" },
+                { label: "Cảnh báo đã xử lý", value: resolvedAlertsCount, icon: Bell, color: "from-rose-500 to-orange-400" },
+                { label: "Node đang quản lý", value: activeNodesCount, icon: Cpu, color: "from-emerald-500 to-teal-400" },
+                { label: "Uptime hoạt động", value: uptimeDays, icon: CheckCircle2, color: "from-amber-400 to-yellow-300" },
+              ].map((s) => {
+                const Icon = s.icon;
+                return (
+                  <GlassCard key={s.label} className="p-5 hover:translate-y-[-2px] transition-transform duration-200">
+                    <div className={cn("grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br text-white shadow-md", s.color)}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div className="mt-4 text-2xl font-bold text-slate-900 tabular-nums">{s.value}</div>
+                    <div className="text-xs font-semibold text-slate-500 mt-1">{s.label}</div>
+                  </GlassCard>
+                );
+              })}
+            </div>
+
+            {/* Managed devices */}
+            <GlassCard className="p-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Cpu className="h-5 w-5 text-indigo-500 animate-pulse" />
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Mạng lưới Nodes thông minh</h3>
+                  <p className="text-xs text-slate-500">Các phần cứng ESP32 liên kết trực tiếp với tài khoản này</p>
+                </div>
+              </div>
+              <ul className="mt-5 space-y-3">
+                {[
+                  { name: "ESP32-S3-Node-01 · Phòng khách", status: livingOnline ? "Online" : "Offline", devices: "Điều hòa, Quạt, Đèn, Cảm biến ánh sáng" },
+                  { name: "ESP32-S3-Node-02 · Phòng ngủ", status: bedroomOnline ? "Online" : "Offline", devices: "Điều hòa, Đèn ngủ, Cảm biến nhiệt độ" },
+                  { name: "ESP32-C3-Kitchen · Nhà bếp", status: kitchenOnline ? "Online" : "Offline", devices: "Quạt hút mùi, Đèn bếp, Cảm biến khí gas" },
+                ].map((d) => (
+                  <li key={d.name} className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/40 p-4 hover:bg-white/60 transition duration-150 shadow-sm">
+                    <div className="min-w-0 pr-3">
+                      <div className="text-sm font-semibold text-slate-900">{d.name}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{d.devices}</div>
+                    </div>
+                    <Badge
+                      className={cn(
+                        "rounded-full px-3 py-1 font-bold text-xs tracking-wide shrink-0 border",
+                        d.status === "Online"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200/50"
+                          : "bg-rose-50 text-rose-700 border-rose-200/50",
+                      )}
+                    >
+                      <span className={cn("inline-block w-1.5 h-1.5 rounded-full mr-1.5", d.status === "Online" ? "bg-emerald-500 animate-pulse" : "bg-rose-500")} />
+                      {d.status}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            </GlassCard>
+
+            {/* Permission Roles & Security Badge */}
+            <GlassCard className="p-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Lock className="h-5 w-5 text-indigo-500" />
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Quyền hạn hệ thống</h3>
+                  <p className="text-xs text-slate-500">Mức độ phân quyền bảo mật tài khoản IoT</p>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                {[
+                  { desc: "Điều khiển thiết bị thời gian thực", active: true },
+                  { desc: "Cấu hình tự động hóa & Ngưỡng", active: true },
+                  { desc: "Xem & Truy xuất nhật ký hoạt động", active: true },
+                  { desc: "Thêm/Xóa các phần cứng Nodes", active: true }
+                ].map((p, idx) => (
+                  <div key={idx} className="flex items-center gap-2 p-2.5 rounded-xl bg-white/50 border border-slate-100">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span className="font-semibold text-slate-700">{p.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+
+          </div>
+
+        </div>
+
       </div>
-      <Switch checked={value} onCheckedChange={onChange} />
     </div>
   );
 }

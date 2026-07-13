@@ -132,8 +132,22 @@ ALTER TABLE dulieucambien  DISABLE ROW LEVEL SECURITY;
 ALTER TABLE den            DISABLE ROW LEVEL SECURITY;
 ALTER TABLE luat           DISABLE ROW LEVEL SECURITY;
 ALTER TABLE nhatkyhoatdong DISABLE ROW LEVEL SECURITY;
-ALTER TABLE nguoidung      DISABLE ROW LEVEL SECURITY;
 ALTER TABLE lichhengio     DISABLE ROW LEVEL SECURITY;
+
+-- 10.1 Cấu hình bảo mật và RLS cho bảng Người Dùng (nguoidung)
+ALTER TABLE nguoidung      ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow select for everyone" ON nguoidung
+    FOR SELECT USING (true);
+
+CREATE POLICY "Allow insert for everyone" ON nguoidung
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Allow update for owners" ON nguoidung
+    FOR UPDATE USING (auth.uid() = auth_uid);
+
+CREATE POLICY "Allow delete for owners" ON nguoidung
+    FOR DELETE USING (auth.uid() = auth_uid);
 
 -- ============================================================
 -- 11. [FIX #2] Bật Realtime cho các bảng cần thiết
@@ -174,3 +188,185 @@ BEGIN
   RETURN format('Đã xóa %s bản ghi cảm biến và %s bản ghi nhật ký', sensor_count, log_count);
 END;
 $$;
+
+-- ============================================================
+-- 14. Hàm lấy dữ liệu xu hướng cảm biến gom nhóm mỗi 2 phút
+-- Trả về khoảng 720 dòng trong vòng 24h qua.
+-- Hỗ trợ giữ lại các mốc không có dữ liệu dưới dạng NULL để vẽ nét đứt (gap).
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.get_sensor_trend_2min()
+RETURNS TABLE (
+    time_bucket TIMESTAMPTZ,
+    avg_temp NUMERIC,
+    avg_humidity NUMERIC,
+    avg_light NUMERIC
+) LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+    RETURN QUERY
+    WITH time_series AS (
+        SELECT generate_series(
+            to_timestamp(floor(extract(epoch FROM NOW() - INTERVAL '24 hours') / 120) * 120),
+            to_timestamp(floor(extract(epoch FROM NOW()) / 120) * 120),
+            INTERVAL '2 minutes'
+        ) AS bucket
+    ),
+    aggregated_data AS (
+        SELECT
+            to_timestamp(floor(extract(epoch FROM thoigian) / 120) * 120) AS tb,
+            AVG(nhietdo) AS t,
+            AVG(doam) AS h,
+            AVG(anhsang) AS l
+        FROM public.dulieucambien
+        WHERE thoigian >= NOW() - INTERVAL '24 hours'
+        GROUP BY tb
+    )
+    SELECT
+        ts.bucket AS time_bucket,
+        ROUND(ad.t, 2) AS avg_temp,
+        ROUND(ad.h, 2) AS avg_humidity,
+        ROUND(ad.l, 2) AS avg_light
+    FROM time_series ts
+    LEFT JOIN aggregated_data ad ON ts.bucket = ad.tb
+    ORDER BY ts.bucket ASC;
+END;
+$$;
+
+-- ============================================================
+-- 15. Hàm lấy dữ liệu xu hướng cảm biến theo khoảng thời gian
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.get_sensor_trend(range_type TEXT)
+RETURNS TABLE (
+    label TEXT,
+    temp NUMERIC,
+    humid NUMERIC,
+    light NUMERIC,
+    temp_prev_avg NUMERIC,
+    humid_prev_avg NUMERIC,
+    light_prev_avg NUMERIC
+) LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+    IF range_type = 'today' THEN
+        RETURN QUERY
+        WITH hour_series AS (
+            SELECT generate_series(
+                DATE_TRUNC('hour', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '23 hours',
+                DATE_TRUNC('hour', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+                INTERVAL '1 hour'
+            ) AS hr
+        ),
+        hourly_data AS (
+            SELECT
+                DATE_TRUNC('hour', thoigian AT TIME ZONE 'Asia/Ho_Chi_Minh') AS hr,
+                AVG(nhietdo) AS t,
+                AVG(doam) AS h,
+                AVG(anhsang) AS l
+            FROM public.dulieucambien
+            WHERE thoigian >= (DATE_TRUNC('hour', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '23 hours'
+            GROUP BY hr
+        )
+        SELECT
+            TO_CHAR(hs.hr, 'HH24:MI')::TEXT AS label,
+            ROUND(hd.t, 1)::NUMERIC AS temp,
+            ROUND(hd.h, 1)::NUMERIC AS humid,
+            ROUND(hd.l, 1)::NUMERIC AS light,
+            NULL::NUMERIC AS temp_prev_avg,
+            NULL::NUMERIC AS humid_prev_avg,
+            NULL::NUMERIC AS light_prev_avg
+        FROM hour_series hs
+        LEFT JOIN hourly_data hd ON hs.hr = hd.hr
+        ORDER BY hs.hr ASC;
+
+    ELSIF range_type = '7d' THEN
+        RETURN QUERY
+        WITH day_series AS (
+            SELECT generate_series(
+                DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '6 days',
+                DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+                INTERVAL '1 day'
+            ) AS dy
+        ),
+        daily_data AS (
+            SELECT
+                DATE_TRUNC('day', thoigian AT TIME ZONE 'Asia/Ho_Chi_Minh') AS dy,
+                AVG(nhietdo) AS t,
+                AVG(doam) AS h,
+                AVG(anhsang) AS l
+            FROM public.dulieucambien
+            WHERE thoigian >= (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '6 days'
+            GROUP BY dy
+        )
+        SELECT
+            TO_CHAR(ds.dy, 'DD/MM')::TEXT AS label,
+            ROUND(dd.t, 1)::NUMERIC AS temp,
+            ROUND(dd.h, 1)::NUMERIC AS humid,
+            ROUND(dd.l, 1)::NUMERIC AS light,
+            NULL::NUMERIC AS temp_prev_avg,
+            NULL::NUMERIC AS humid_prev_avg,
+            NULL::NUMERIC AS light_prev_avg
+        FROM day_series ds
+        LEFT JOIN daily_data dd ON ds.dy = dd.dy
+        ORDER BY ds.dy ASC;
+
+    ELSIF range_type = '30d' THEN
+        RETURN QUERY
+        WITH day_series AS (
+            SELECT generate_series(
+                DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '29 days',
+                DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+                INTERVAL '1 day'
+            ) AS dy
+        ),
+        daily_data AS (
+            SELECT
+                DATE_TRUNC('day', thoigian AT TIME ZONE 'Asia/Ho_Chi_Minh') AS dy,
+                AVG(nhietdo) AS t,
+                AVG(doam) AS h,
+                AVG(anhsang) AS l
+            FROM public.dulieucambien
+            WHERE thoigian >= (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '29 days'
+            GROUP BY dy
+        )
+        SELECT
+            TO_CHAR(ds.dy, 'DD/MM')::TEXT AS label,
+            ROUND(dd.t, 1)::NUMERIC AS temp,
+            ROUND(dd.h, 1)::NUMERIC AS humid,
+            ROUND(dd.l, 1)::NUMERIC AS light,
+            NULL::NUMERIC AS temp_prev_avg,
+            NULL::NUMERIC AS humid_prev_avg,
+            NULL::NUMERIC AS light_prev_avg
+        FROM day_series ds
+        LEFT JOIN daily_data dd ON ds.dy = dd.dy
+        ORDER BY ds.dy ASC;
+    END IF;
+END;
+$$;
+
+
+-- ============================================================
+-- 16. Hàm lấy dữ liệu trung bình 7 ngày qua theo thứ và giờ cho bản đồ nhiệt
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.get_sensor_heatmap()
+RETURNS TABLE (
+    dow INT,
+    hr INT,
+    avg_temp NUMERIC,
+    avg_humid NUMERIC,
+    avg_light NUMERIC
+) LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        EXTRACT(ISODOW FROM thoigian AT TIME ZONE 'Asia/Ho_Chi_Minh')::INT AS dow,
+        EXTRACT(HOUR FROM thoigian AT TIME ZONE 'Asia/Ho_Chi_Minh')::INT AS hr,
+        ROUND(AVG(nhietdo), 1)::NUMERIC AS avg_temp,
+        ROUND(AVG(doam), 1)::NUMERIC AS avg_humid,
+        ROUND(AVG(anhsang), 1)::NUMERIC AS avg_light
+    FROM public.dulieucambien
+    WHERE thoigian >= (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '6 days'
+    GROUP BY dow, hr
+    ORDER BY dow, hr;
+END;
+$$;
+
+
+

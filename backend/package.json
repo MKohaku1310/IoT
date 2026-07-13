@@ -13,6 +13,7 @@
     "mqtt": "^5.5.0"
   },
   "devDependencies": {
+    "docx": "^9.7.1",
     "nodemon": "^3.1.0"
   }
 }

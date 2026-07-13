@@ -282,6 +282,10 @@ void loop() {
       client.publish("buivansang_iot_pj/lux", String(lux, 1).c_str());
     }
 
+    // ----- GỬI UPTIME THỜI GIAN THỰC (giây kể từ lúc boot) -----
+    unsigned long uptimeSeconds = millis() / 1000;
+    client.publish("buivansang_iot_pj/s3-node-01/uptime", String(uptimeSeconds).c_str(), true);
+
     // ----- LOGIC ĐIỀU KHIỂN & ĐỒNG BỘ TRẠNG THÁI -----
 
     // 1. LED 1 (Điều hòa - Tự động bật khi nhiệt độ cao)

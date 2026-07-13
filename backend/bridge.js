@@ -239,38 +239,54 @@ function startBridge() {
 
   // B. Đăng ký Realtime lắng nghe thay đổi trên bảng 'den' (từ Web dashboard) để gửi xuống ESP32
   supabaseService.subscribeToDeviceChanges((updatedDevice, oldDevice) => {
-    if (updatedDevice.trangthai !== oldDevice.trangthai) {
+    const statusChanged = updatedDevice.trangthai !== oldDevice.trangthai;
+    logger.info(`[Realtime DB] ↓ Nhận sự kiện UPDATE bảng "den" - Thiết bị: "${updatedDevice.tenden}" (ID=${updatedDevice.idden})`);
+    logger.info(`  Trạng thái cũ: ${oldDevice.trangthai === 1 ? 'BẬT' : 'TẮT'} → Mới: ${updatedDevice.trangthai === 1 ? 'BẬT' : 'TẮT'} | Thay đổi: ${statusChanged ? 'CÓ' : 'KHÔNG'}`);
+
+    if (statusChanged) {
       const topics = getDeviceTopics(updatedDevice.idden);
       if (topics) {
         const payloadStr = updatedDevice.trangthai === 1 ? 'ON' : 'OFF';
-        logger.info(`[Realtime DB] Thiết bị "${updatedDevice.tenden}" thay đổi trạng thái -> ${payloadStr}. Đang gửi lệnh MQTT...`);
+        logger.info(`  → Gửi lệnh MQTT: ${topics.ctrl} = ${payloadStr}`);
         mqttService.publish(topics.ctrl, payloadStr, { qos: 1 });
+      } else {
+        logger.warn(`  ⚠ Không tìm được topic MQTT cho thiết bị ID=${updatedDevice.idden}`);
       }
     }
   });
 
   // C. Đăng ký Realtime lắng nghe thay đổi trên bảng 'luat' (từ Web dashboard) để gửi xuống ESP32
   supabaseService.subscribeToRuleChanges((updatedRule, oldRule) => {
-    if (updatedRule.automation !== oldRule.automation) {
+    const autoChanged = updatedRule.automation !== oldRule.automation;
+    const nguongChanged = updatedRule.nguong !== oldRule.nguong;
+    const sensorLabel = updatedRule.loaicambien === 'NhietDo' ? 'Nhiệt độ' : updatedRule.loaicambien === 'DoAm' ? 'Độ ẩm' : 'Ánh sáng';
+    logger.info(`[Realtime DB] ↓ Nhận sự kiện UPDATE bảng "luat" - Luật ID=${updatedRule.idluat} (Thiết bị ID=${updatedRule.idden}, Cảm biến: ${sensorLabel})`);
+    logger.info(`  Tự động: ${oldRule.automation ? 'ON' : 'OFF'} → ${updatedRule.automation ? 'ON' : 'OFF'} | Ngưỡng: ${oldRule.nguong} → ${updatedRule.nguong}`);
+
+    if (autoChanged) {
       const topics = getDeviceTopics(updatedRule.idden);
       if (topics) {
         const payloadStr = updatedRule.automation ? 'ON' : 'OFF';
-        logger.info(`[Realtime DB] Luật ID=${updatedRule.idluat} (Thiết bị ID=${updatedRule.idden}) thay đổi tự động hóa -> ${payloadStr}. Đang gửi lệnh MQTT...`);
+        logger.info(`  → Gửi lệnh MQTT chế độ tự động: ${topics.autoCtrl} = ${payloadStr}`);
         mqttService.publish(topics.autoCtrl, payloadStr, { qos: 1 });
       }
     }
     
     // Gửi ngưỡng mới xuống ESP32 qua MQTT nếu người dùng đổi trên Web
-    if (updatedRule.nguong !== oldRule.nguong) {
+    if (nguongChanged) {
       let topic = '';
       if (updatedRule.loaicambien === 'NhietDo') topic = TOPICS.THRESHOLD_TEMP;
       else if (updatedRule.loaicambien === 'DoAm') topic = TOPICS.THRESHOLD_HUM;
       else if (updatedRule.loaicambien === 'AnhSang') topic = TOPICS.THRESHOLD_LUX;
       
       if (topic) {
-        logger.info(`[Realtime DB] Luật ID=${updatedRule.idluat} thay đổi ngưỡng -> ${updatedRule.nguong}. Đang gửi lệnh MQTT...`);
+        logger.info(`  → Gửi ngưỡng mới MQTT: ${topic} = ${updatedRule.nguong}`);
         mqttService.publish(topic, String(updatedRule.nguong), { retain: true, qos: 1 });
       }
+    }
+    
+    if (!autoChanged && !nguongChanged) {
+      logger.info('  (Không có thay đổi cần đồng bộ xuống ESP32)');
     }
   });
 
@@ -312,7 +328,28 @@ http.createServer((req, res) => {
   }
 }).listen(PORT, () => {
   logger.info(`Health-Check HTTP Server đang lắng nghe tại cổng ${PORT}`);
-  logger.info(`Để ngăn Render spin-down, hãy cấu hình UptimeRobot ping: https://<render-url>/health mỗi 10 phút.`);
+
+  // ==========================================
+  // Self-Ping: Tự động gọi /health mỗi 10 phút
+  // Giữ cho Render Free Tier không bao giờ spin-down
+  // Không cần cấu hình UptimeRobot bên ngoài
+  // ==========================================
+  const SELF_PING_INTERVAL_MS = 10 * 60 * 1000; // 10 phút
+  const RENDER_URL = process.env.RENDER_EXTERNAL_URL || process.env.SELF_URL || null;
+
+  if (RENDER_URL) {
+    logger.info(`[Self-Ping] Đã bật tự động ping ${RENDER_URL}/health mỗi 10 phút để giữ Render luôn thức.`);
+    setInterval(() => {
+      const pingUrl = `${RENDER_URL}/health`;
+      http.get(pingUrl, (res) => {
+        logger.info(`[Self-Ping] Đã ping thành công: ${pingUrl} → HTTP ${res.statusCode}`);
+      }).on('error', (err) => {
+        logger.warn(`[Self-Ping] Lỗi ping: ${err.message}`);
+      });
+    }, SELF_PING_INTERVAL_MS);
+  } else {
+    logger.info('[Self-Ping] Biến RENDER_EXTERNAL_URL chưa được đặt. Self-ping bị tắt (chế độ local/dev).');
+  }
 });
 
 // Dọn dẹp tài nguyên khi tắt chương trình
