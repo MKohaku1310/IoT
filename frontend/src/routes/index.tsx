@@ -217,7 +217,7 @@ function Dashboard() {
   };
 
   const [bellPing, setBellPing] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ hoten: string; email: string; idnguoidung?: number } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ hoten: string; email: string; idnguoidung?: number; vaitro?: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -843,7 +843,6 @@ function Dashboard() {
       toast.error(`Lỗi đổi chế độ: ${(err as any).message}`);
     }
   };
-
   // Cmd/Ctrl+K for palette
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -855,6 +854,14 @@ function Dashboard() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // Guard: non-admins cannot access health tab
+  useEffect(() => {
+    if (tab === "health" && currentUser?.vaitro !== "admin") {
+      setTab("dashboard");
+    }
+  }, [tab, currentUser]);
+
 
   const particleModes = useMemo(() => {
     const m = [];
@@ -937,6 +944,7 @@ function Dashboard() {
           kitchenOnline={kitchenOnline}
           supabaseOnline={supabaseOnline}
           mqttOnline={mqttOnline}
+          currentUserRole={currentUser?.vaitro}
           onCloseMobile={() => setMobileSidebarOpen(false)}
           className={cn(
             "fixed inset-y-0 left-0 z-50 h-full border-r shadow-2xl transition-transform duration-300 transform lg:hidden",
@@ -959,6 +967,7 @@ function Dashboard() {
           kitchenOnline={kitchenOnline}
           supabaseOnline={supabaseOnline}
           mqttOnline={mqttOnline}
+          currentUserRole={currentUser?.vaitro}
           className="hidden lg:flex sticky top-0 h-screen"
         />
 
@@ -990,10 +999,11 @@ function Dashboard() {
                 alerts={alerts}
                 nodeName={node.name}
                 thresholds={thresholds}
+                currentUserRole={currentUser?.vaitro}
               />
             )}
             {tab === "sensors" && <SensorsTab />}
-            {tab === "schedule" && <ScheduleTab />}
+            {tab === "schedule" && <ScheduleTab currentUserRole={currentUser?.vaitro} />}
             {tab === "activity" && <ActivityTab />}
             {tab === "notifications" && (
               <NotificationsTab
@@ -1011,7 +1021,7 @@ function Dashboard() {
                 mqttOnline={mqttOnline}
               />
             )}
-            {tab === "settings" && <SettingsTab />}
+            {tab === "settings" && <SettingsTab currentUserRole={currentUser?.vaitro} />}
           </div>
         </main>
       </div>

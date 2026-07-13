@@ -37,6 +37,7 @@ CREATE TABLE nguoidung (
     github      VARCHAR(100),
     figma       VARCHAR(100),
     linkpdf     TEXT,
+    vaitro      VARCHAR(20) DEFAULT 'buyer',
     thoigian    TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -367,6 +368,65 @@ BEGIN
     ORDER BY dow, hr;
 END;
 $$;
+
+
+-- ============================================================
+-- 17. Bảng Kho Thiết Bị Xuất Xưởng (Hỗ trợ Device Claiming Flow)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.thietbi_khoban (
+    id_thietbi      BIGSERIAL PRIMARY KEY,
+    mac_address     VARCHAR(20) UNIQUE NOT NULL,             -- Địa chỉ MAC vật lý của ESP32
+    ma_kichhoat     VARCHAR(20) UNIQUE NOT NULL,             -- Mã kích hoạt in trên vỏ hộp
+    loai_thietbi    VARCHAR(30),                             -- 'den', 'quat', 'dieuhoa'...
+    trangthai       VARCHAR(20) DEFAULT 'chua_ban',          -- 'chua_ban', 'da_ban', 'thu_hoi'
+    idnguoidung     BIGINT REFERENCES public.nguoidung(idnguoidung) ON DELETE SET NULL, -- Chủ sở hữu thiết bị
+    nha_id          BIGINT,                                  -- Thuộc về ngôi nhà nào (tùy chọn)
+    ngay_kichhoat   TIMESTAMPTZ,
+    thoigian_taokho  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Liên kết bảng den thực tế với kho thiết bị
+ALTER TABLE public.den ADD COLUMN IF NOT EXISTS id_thietbi_khoban BIGINT REFERENCES public.thietbi_khoban(id_thietbi) ON DELETE CASCADE;
+
+
+-- ============================================================
+-- 18. Bảng Thông Báo Hệ Thống (Thảo luận & Thông báo 2 chiều)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.thongbao_hethong (
+    id_thongbao     BIGSERIAL PRIMARY KEY,
+    tieude          VARCHAR(200) NOT NULL,
+    noidung         TEXT NOT NULL,
+    loai            VARCHAR(20) DEFAULT 'capnhat',           -- 'capnhat', 'baotri', 'canhbao', 'phanhoi'
+    nguoi_gui       BIGINT REFERENCES public.nguoidung(idnguoidung) ON DELETE SET NULL, -- Admin nào gửi
+    doi_tuong       VARCHAR(20) DEFAULT 'all',               -- 'all' hoặc 'ca_nhan'
+    idnguoidung_nhan BIGINT REFERENCES public.nguoidung(idnguoidung) ON DELETE CASCADE, -- Nhận cá nhân
+    da_doc          BOOLEAN DEFAULT FALSE,
+    thoigian        TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+-- ============================================================
+-- 19. Bảng Yêu Cầu Hỗ Trợ Kỹ Thuật (Tickets)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.yeucau_hotro (
+    id_yeucau       BIGSERIAL PRIMARY KEY,
+    idnguoidung     BIGINT REFERENCES public.nguoidung(idnguoidung) ON DELETE CASCADE NOT NULL,
+    tieude          VARCHAR(200) NOT NULL,
+    noidung         TEXT NOT NULL,
+    loai            VARCHAR(20) DEFAULT 'hotro',             -- 'hotro', 'gopy', 'loi_thietbi'
+    trangthai       VARCHAR(20) DEFAULT 'moi',               -- 'moi', 'dang_xuly', 'da_xuly'
+    id_thietbi_khoban BIGINT REFERENCES public.thietbi_khoban(id_thietbi) ON DELETE SET NULL, -- Thiết bị gặp lỗi
+    thoigian_gui    TIMESTAMPTZ DEFAULT NOW(),
+    thoigian_xuly   TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS public.phanhoi_hotro (
+    id_phanhoi      BIGSERIAL PRIMARY KEY,
+    id_yeucau       BIGINT REFERENCES public.yeucau_hotro(id_yeucau) ON DELETE CASCADE NOT NULL,
+    nguoi_phanhoi   BIGINT REFERENCES public.nguoidung(idnguoidung) ON DELETE CASCADE NOT NULL, -- Admin hoặc User phản hồi
+    noidung         TEXT NOT NULL,
+    thoigian        TIMESTAMPTZ DEFAULT NOW()
+);
 
 
 

@@ -15,6 +15,7 @@ import {
   Bot,
   CloudRain,
   CheckCircle2,
+  Cpu,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -694,6 +695,7 @@ export function DashboardTab({
   alerts,
   nodeName,
   thresholds,
+  currentUserRole = "buyer",
 }: {
   devices: Devices;
   onToggle: (key: "ac" | "fan" | "light", idden: number, on: boolean) => void;
@@ -703,6 +705,7 @@ export function DashboardTab({
   alerts: Alert[];
   nodeName: string;
   thresholds?: Record<string, number>;
+  currentUserRole?: string;
 }) {
   const tempA = useAnimatedNumber(sensors.temp);
   const humidA = useAnimatedNumber(sensors.humid);
@@ -827,38 +830,111 @@ export function DashboardTab({
         })}
       </div>
 
-      <div className="grid grid-cols-3 gap-3 sm:gap-5">
-        <DeviceCard
-          name="Điều hòa"
-          icon={Wind}
-          gradient="from-sky-500 to-indigo-500"
-          glow="rgba(56,189,248,0.55)"
-          state={devices.ac}
-          onToggle={(on) => onToggle("ac", 1, on)}
-          onMode={(mode) => onMode("ac", 1, mode)}
-          acBreeze={devices.ac.on}
-        />
-        <DeviceCard
-          name="Quạt"
-          icon={Fan}
-          gradient="from-emerald-500 to-teal-400"
-          glow="rgba(16,185,129,0.5)"
-          state={devices.fan}
-          onToggle={(on) => onToggle("fan", 2, on)}
-          onMode={(mode) => onMode("fan", 2, mode)}
-          spinIcon={devices.fan.on}
-        />
-        <DeviceCard
-          name="Đèn"
-          icon={Lightbulb}
-          gradient="from-amber-400 to-orange-400"
-          glow="rgba(251,191,36,0.7)"
-          state={devices.light}
-          onToggle={(on) => onToggle("light", 3, on)}
-          onMode={(mode) => onMode("light", 3, mode)}
-          lightHalo={devices.light.on}
-        />
-      </div>
+      {currentUserRole === "admin" ? (
+        <GlassCard className="p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Cpu className="h-5 w-5 text-indigo-500" />
+            <div>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-white">Giám sát Vận hành Kỹ thuật</h3>
+              <p className="text-xs text-slate-500">Thông số kết nối và cổng kết nối phần cứng của ngôi nhà</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Device 1: AC */}
+            <div className="p-4 rounded-2xl bg-white/40 border border-slate-100/50 dark:bg-slate-900/40 dark:border-slate-800/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-500">
+                  <Wind className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Điều hòa phòng khách</h4>
+                  <p className="text-[10px] text-slate-500">GPIO 12 · Tải: AC Relay</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                  <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                  Sẵn sàng
+                </span>
+                <p className="text-[10px] text-slate-400 mt-1">Phản hồi: ~12ms</p>
+              </div>
+            </div>
+
+            {/* Device 2: Fan */}
+            <div className="p-4 rounded-2xl bg-white/40 border border-slate-100/50 dark:bg-slate-900/40 dark:border-slate-800/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                  <Fan className="h-5 w-5 animate-spin" style={{ animationDuration: '4s' }} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Quạt thông gió</h4>
+                  <p className="text-[10px] text-slate-500">GPIO 14 · Tải: DC Motor</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                  <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                  Sẵn sàng
+                </span>
+                <p className="text-[10px] text-slate-400 mt-1">Phản hồi: ~15ms</p>
+              </div>
+            </div>
+
+            {/* Device 3: Light */}
+            <div className="p-4 rounded-2xl bg-white/40 border border-slate-100/50 dark:bg-slate-900/40 dark:border-slate-800/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center text-amber-500">
+                  <Lightbulb className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Hệ thống đèn trần</h4>
+                  <p className="text-[10px] text-slate-500">GPIO 15 · Tải: LED Driver</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                  <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                  Sẵn sàng
+                </span>
+                <p className="text-[10px] text-slate-400 mt-1">Phản hồi: ~8ms</p>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      ) : (
+        <div className="grid grid-cols-3 gap-3 sm:gap-5">
+          <DeviceCard
+            name="Điều hòa"
+            icon={Wind}
+            gradient="from-sky-500 to-indigo-500"
+            glow="rgba(56,189,248,0.55)"
+            state={devices.ac}
+            onToggle={(on) => onToggle("ac", 1, on)}
+            onMode={(mode) => onMode("ac", 1, mode)}
+            acBreeze={devices.ac.on}
+          />
+          <DeviceCard
+            name="Quạt"
+            icon={Fan}
+            gradient="from-emerald-500 to-teal-400"
+            glow="rgba(16,185,129,0.5)"
+            state={devices.fan}
+            onToggle={(on) => onToggle("fan", 2, on)}
+            onMode={(mode) => onMode("fan", 2, mode)}
+            spinIcon={devices.fan.on}
+          />
+          <DeviceCard
+            name="Đèn"
+            icon={Lightbulb}
+            gradient="from-amber-400 to-orange-400"
+            glow="rgba(251,191,36,0.7)"
+            state={devices.light}
+            onToggle={(on) => onToggle("light", 3, on)}
+            onMode={(mode) => onMode("light", 3, mode)}
+            lightHalo={devices.light.on}
+          />
+        </div>
+      )}
 
       {/* Redesigned 24h Trend Chart - Combined into 1 line chart */}
       <GlassCard className="p-5">

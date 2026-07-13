@@ -33,7 +33,7 @@ const DEVICE_LABELS = {
 
 const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
-export function ScheduleTab() {
+export function ScheduleTab({ currentUserRole = "buyer" }: { currentUserRole?: string }) {
   const [rules, setRules] = useState<ScheduleRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState({
@@ -201,7 +201,8 @@ export function ScheduleTab() {
 
   return (
     <div className="space-y-6">
-      <GlassCard>
+      {currentUserRole !== "admin" && (
+        <GlassCard>
         <div className="mb-4 flex items-center gap-2">
           <CalendarClock className="h-4 w-4 text-indigo-500" />
           <div>
@@ -277,6 +278,7 @@ export function ScheduleTab() {
           </Button>
         </div>
       </GlassCard>
+      )}
 
       <GlassCard>
         <div className="mb-4">
@@ -329,26 +331,31 @@ export function ScheduleTab() {
                   <Switch
                     checked={r.enabled}
                     onCheckedChange={(v) => handleToggleActive(r.id, v)}
+                    disabled={currentUserRole === "admin"}
                   />
-                  <button
-                    onClick={() => handleEdit(r)}
-                    className={cn(
-                      "grid h-9 w-9 place-items-center rounded-lg transition cursor-pointer",
-                      r.id === editingRuleId
-                        ? "text-indigo-600 bg-indigo-100"
-                        : "text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-slate-700"
-                    )}
-                    title="Chỉnh sửa"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => remove(r.id)}
-                    className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950 cursor-pointer"
-                    title="Xóa"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {currentUserRole !== "admin" && (
+                    <>
+                      <button
+                        onClick={() => handleEdit(r)}
+                        className={cn(
+                          "grid h-9 w-9 place-items-center rounded-lg transition cursor-pointer",
+                          r.id === editingRuleId
+                            ? "text-indigo-600 bg-indigo-100"
+                            : "text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-slate-700"
+                        )}
+                        title="Chỉnh sửa"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => remove(r.id)}
+                        className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950 cursor-pointer"
+                        title="Xóa"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
                 </li>
               );
             })}

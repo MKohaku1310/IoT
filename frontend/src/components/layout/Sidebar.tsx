@@ -41,6 +41,7 @@ export function Sidebar({
   kitchenOnline,
   supabaseOnline,
   mqttOnline,
+  currentUserRole = "buyer",
 }: {
   tab: TabKey;
   setTab: (t: TabKey) => void;
@@ -56,6 +57,7 @@ export function Sidebar({
   kitchenOnline: boolean;
   supabaseOnline: boolean;
   mqttOnline: boolean;
+  currentUserRole?: string;
 }) {
   return (
     <aside
@@ -102,7 +104,7 @@ export function Sidebar({
       </div>
 
       <nav className="flex flex-col gap-1">
-        {TABS.map(({ key, label, icon: Icon }) => {
+        {TABS.filter(t => currentUserRole === "admin" || t.key !== "health").map(({ key, label, icon: Icon }) => {
           const active = tab === key;
           const showBadge = key === "notifications" && alertCount > 0;
           return (
