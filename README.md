@@ -72,15 +72,30 @@ IoT-PJ1/
 │   │   ├── supabaseService.js   # CRUD + Realtime Supabase
 │   │   ├── automationService.js # Đánh giá luật tự động hóa
 │   │   └── scheduleService.js   # Lịch hẹn giờ thiết bị
+│   ├── scripts/
+│   │   ├── simulator.js       # Giả lập ESP32 gửi dữ liệu MQTT
+│   │   ├── generate_docs.js   # Tạo tài liệu Word hướng dẫn test
+│   │   ├── query_samples.js   # Các câu truy vấn mẫu qua RPC
+│   │   ├── test_now.js        # Script test nhanh RPC lấy dữ liệu hôm nay
+│   │   └── test_rpc_7d.js     # Script test RPC 7 ngày / 30 ngày / heatmap
 │   ├── utils/
 │   │   └── logger.js      # Logger có màu sắc
-│   ├── simulator.js       # Giả lập ESP32 gửi dữ liệu MQTT
 │   ├── .env               # Biến môi trường (KHÔNG commit lên git)
 │   └── package.json
+├── database/
+│   ├── schema.sql         # Schema database Supabase đầy đủ
+│   └── admin_migration.sql # Sql bổ sung bảng và phân quyền admin/buyer
+├── docs/
+│   ├── BaoCao_IoT_SmartHome.docx # Báo cáo môn học Smart Home
+│   ├── Huong_Dan_Van_Hanh_Admin.docx # Hướng dẫn vận hành hệ thống cho admin
+│   ├── Huong_Dan_Van_Hanh_Admin_V2.docx # Hướng dẫn vận hành V2
+│   ├── TEST_COMMANDS.docx # Hướng dẫn chạy test backend và frontend (tự sinh)
+│   ├── test.puml          # Sơ đồ thiết kế PlantUML
+│   └── uml_diagrams.md    # Tài liệu giải thích sơ đồ UML
 ├── frontend/
 │   ├── src/
 │   │   ├── routes/
-│   │   │   ├── index.tsx  # Dashboard chính (3600+ dòng)
+│   │   │   ├── index.tsx  # Dashboard chính
 │   │   │   ├── login.tsx  # Trang đăng nhập
 │   │   │   └── profile.tsx # Trang hồ sơ người dùng
 │   │   └── lib/
@@ -88,7 +103,6 @@ IoT-PJ1/
 │   │       └── mqttClient.ts  # MQTT WebSocket client (direct publish)
 │   ├── .env               # Biến môi trường frontend
 │   └── package.json
-├── schema.sql             # Schema database Supabase đầy đủ
 └── README.md
 ```
 
@@ -139,7 +153,7 @@ VITE_SUPABASE_ANON_KEY=sb_publishable_YOUR_ANON_KEY
 
 ### 4. Khởi tạo Database Supabase
 
-Vào **Supabase Dashboard → SQL Editor**, paste toàn bộ nội dung file `schema.sql` và chạy.
+Vào **Supabase Dashboard → SQL Editor**, paste toàn bộ nội dung file `database/schema.sql` và chạy.
 
 ### 5. Cấu hình Arduino
 
@@ -171,7 +185,7 @@ npm start
 **Output mong đợi khi khởi động thành công:**
 ```
 [INFO]    --- KHỞI ĐỘNG HỆ THỐNG SMART HOME BRIDGE ---
-[SUCCESS] Đã kết nối kênh Realtime bảng "den": trạng thái = SUBSCRIBED
+[SUCCESS] Đã kết nối kênh Realtime bảng "thietbi": trạng thái = SUBSCRIBED
 [SUCCESS] Đã kết nối kênh Realtime bảng "luat": trạng thái = SUBSCRIBED
 [SUCCESS] Kết nối thành công đến MQTT Broker!
 [INFO]    Đã subscribe thành công các topic: [...]
@@ -190,7 +204,7 @@ Mở trình duyệt tại: `http://localhost:3000`
 
 ```bash
 cd backend
-node simulator.js
+node scripts/simulator.js
 ```
 
 ---
@@ -250,7 +264,7 @@ Hoặc kết nối GitHub repo trên Vercel Dashboard. Thêm Environment Variabl
 | Bảng | Mô tả |
 |------|-------|
 | `dulieucambien` | Lịch sử đo đạc cảm biến từ ESP32 |
-| `den` | Trạng thái hiện tại của các thiết bị (điều hòa, quạt, đèn) |
+| `thietbi` | Danh sách và trạng thái các thiết bị (điều hòa, quạt, đèn) |
 | `luat` | Cấu hình luật tự động hóa và ngưỡng cảm biến |
 | `nguoidung` | Thông tin người dùng (liên kết Supabase Auth) |
 | `nhatkyhoatdong` | Nhật ký mọi hành động điều khiển |

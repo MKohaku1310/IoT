@@ -11,6 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
+import { NodeProvider } from "@/hooks/use-node-context";
+import { CustomTimeProvider } from "@/hooks/use-custom-time.tsx";
 
 function NotFoundComponent() {
   return (
@@ -117,9 +119,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      <Toaster position="bottom-right" richColors closeButton />
+      <CustomTimeProvider>
+        <NodeProvider>
+          <Outlet />
+          <Toaster position="bottom-right" richColors closeButton />
+        </NodeProvider>
+      </CustomTimeProvider>
     </QueryClientProvider>
   );
 }

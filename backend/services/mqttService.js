@@ -20,11 +20,16 @@ const mqttService = {
     client.on('connect', () => {
       logger.success('Kết nối thành công đến MQTT Broker!');
       
-      // Đăng ký tất cả các topic cần nhận tin
+      // Đăng ký tất cả các topic cần nhận tin (với wildcard cho multi-node + legacy cho backward compatibility)
       const topicsToSubscribe = [
-        TOPICS.TEMP, TOPICS.HUM, TOPICS.LUX,
-        TOPICS.LED1_STATE, TOPICS.LED2_STATE, TOPICS.LED3_STATE,
-        TOPICS.AUTO1_STATE, TOPICS.AUTO2_STATE, TOPICS.AUTO3_STATE
+        TOPICS.TEMP_WILDCARD, TOPICS.HUM_WILDCARD, TOPICS.LUX_WILDCARD,
+        TOPICS.TEMP_LEGACY, TOPICS.HUM_LEGACY, TOPICS.LUX_LEGACY,  // Legacy topics
+        TOPICS.GAS,
+        TOPICS.HEARTBEAT,
+        TOPICS.LED_STATE_WILDCARD, TOPICS.LED2_STATE_WILDCARD, TOPICS.LED3_STATE_WILDCARD,
+        TOPICS.LED1_STATE, TOPICS.LED2_STATE, TOPICS.LED3_STATE,  // Legacy state topics
+        TOPICS.AUTO_STATE_WILDCARD, TOPICS.AUTO2_STATE_WILDCARD, TOPICS.AUTO3_STATE_WILDCARD,
+        TOPICS.AUTO1_STATE, TOPICS.AUTO2_STATE, TOPICS.AUTO3_STATE  // Legacy auto topics
       ];
       
       client.subscribe(topicsToSubscribe, (err) => {

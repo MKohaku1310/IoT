@@ -21,6 +21,9 @@ node_modules/
 .env.staging
 .dev.vars
 
+# Arduino secrets (WiFi, thresholds, etc.)
+arduino/secrets.h
+
 # Build outputs
 dist/
 **/dist/

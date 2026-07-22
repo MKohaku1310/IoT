@@ -11,20 +11,49 @@
 
 import mqtt, { type MqttClient, type IClientOptions } from "mqtt";
 
-const BROKER_WS_URL = "wss://broker.hivemq.com:8884/mqtt";
-const TOPIC_PREFIX = "buivansang_iot_pj";
+const DEFAULT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
+const DEFAULT_PREFIX = "buivansang_iot_pj";
+
+const BROKER_WS_URL = typeof window !== "undefined"
+  ? window.localStorage.getItem("sh-mqtt-broker") || DEFAULT_BROKER
+  : DEFAULT_BROKER;
+
+const TOPIC_PREFIX = typeof window !== "undefined"
+  ? window.localStorage.getItem("sh-mqtt-prefix") || DEFAULT_PREFIX
+  : DEFAULT_PREFIX;
 
 export const CTRL_TOPICS = {
-  LED1: `${TOPIC_PREFIX}/led`,
+  LED1: `${TOPIC_PREFIX}/led1`,
   LED2: `${TOPIC_PREFIX}/led2`,
   LED3: `${TOPIC_PREFIX}/led3`,
-  AUTO1: `${TOPIC_PREFIX}/automode`,
+  AUTO1: `${TOPIC_PREFIX}/automode1`,
   AUTO2: `${TOPIC_PREFIX}/automode2`,
   AUTO3: `${TOPIC_PREFIX}/automode3`,
   THRESHOLD_TEMP: `${TOPIC_PREFIX}/threshold/temp`,
   THRESHOLD_HUM:  `${TOPIC_PREFIX}/threshold/hum`,
   THRESHOLD_LUX:  `${TOPIC_PREFIX}/threshold/lux`,
 } as const;
+
+/**
+ * Lấy topic MQTT cho thiết bị theo loai_thietbi và nodeId
+ */
+export function getDeviceMqttTopic(
+  loaiThietBi: string,
+  nodeId?: string
+): { ctrl: string; auto: string } | null {
+  const prefix = nodeId ? `${TOPIC_PREFIX}/${nodeId}` : TOPIC_PREFIX;
+  if (loaiThietBi === "dieu_hoa") {
+    return { ctrl: `${prefix}/led1`, auto: `${prefix}/automode1` };
+  }
+  if (loaiThietBi === "quat") {
+    return { ctrl: `${prefix}/led2`, auto: `${prefix}/automode2` };
+  }
+  if (loaiThietBi === "den") {
+    return { ctrl: `${prefix}/led3`, auto: `${prefix}/automode3` };
+  }
+  return null;
+}
+
 
 // ----------------------------------------------------------------
 // Singleton MQTT client (tái sử dụng 1 kết nối WS duy nhất)

@@ -142,3 +142,38 @@
     color: var(--color-foreground);
   }
 }
+
+@keyframes breathing {
+  0%, 100% {
+    box-shadow: 0 0 10px var(--glow, rgba(99, 102, 241, 0.35));
+  }
+  50% {
+    box-shadow: 0 0 24px var(--glow, rgba(99, 102, 241, 0.65));
+  }
+}
+
+@keyframes wind-sway {
+  0%, 100% {
+    transform: rotate(-14deg) scale(1);
+    filter: drop-shadow(0 0 4px rgba(129, 140, 248, 0.6));
+  }
+  50% {
+    transform: rotate(14deg) scale(1.18);
+    filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.95));
+  }
+}
+
+/* Auto-adapt text color for titles/subtitles outside cards when background is dark (night/evening) */
+.is-dark-bg .text-slate-900:not([class*="bg-white"] *):not([class*="bg-slate-900"] *):not(button *),
+.is-dark-bg .text-slate-800:not([class*="bg-white"] *):not([class*="bg-slate-900"] *):not(button *) {
+  color: #f8fafc !important;
+}
+
+.is-dark-bg .text-slate-700:not([class*="bg-white"] *):not([class*="bg-slate-900"] *):not(button *),
+.is-dark-bg .text-slate-600:not([class*="bg-white"] *):not([class*="bg-slate-900"] *):not(button *) {
+  color: #e2e8f0 !important;
+}
+
+.is-dark-bg .text-slate-500:not([class*="bg-white"] *):not([class*="bg-slate-900"] *):not(button *) {
+  color: #cbd5e1 !important;
+}
